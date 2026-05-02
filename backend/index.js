@@ -18,7 +18,7 @@ const wallet  = require('./wallet');
 const db      = require('./db');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: "*", methods: ["GET","POST","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] }));
 app.use(express.json());
 
 // Serve dashboard estático (quando rodando local)
