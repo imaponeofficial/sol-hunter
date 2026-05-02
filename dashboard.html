@@ -1366,12 +1366,21 @@ sol-hunter/
 // =====================================================
 // Helper: monta URL do Railway para todas as chamadas de API
 function api(path) {
-  const base = (state && state.config && state.config.backendUrl)
-    ? state.config.backendUrl
-    : (localStorage.getItem('solhunter_config')
-        ? (JSON.parse(localStorage.getItem('solhunter_config') || '{}').backendUrl || '')
-        : '');
-  return base + path;
+  try {
+    const inputEl = document.getElementById('cfg-backend-url');
+    if (inputEl && inputEl.value.trim()) {
+      return inputEl.value.trim().replace(/\/$/, '') + path;
+    }
+    if (typeof state !== 'undefined' && state.config && state.config.backendUrl) {
+      return state.config.backendUrl + path;
+    }
+    const saved = localStorage.getItem('solhunter_config');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.backendUrl) return parsed.backendUrl + path;
+    }
+  } catch(e) {}
+  return path;
 }
 
 const state = {
@@ -1635,10 +1644,13 @@ async function previewBuy() {
     if (!res.ok) throw new Error('Backend não disponível');
     const data = await res.json();
     state.previewTokens = data.tokens || [];
+    if (state.previewTokens.length === 0) {
+      toast('Nenhum token encontrado nessa carteira no range de MC definido', 'warn');
+    }
   } catch(e) {
-    // Simulate preview when backend not running
-    log('Backend offline — usando dados simulados', 'warn');
-    state.previewTokens = simulateTokens(qty, mcMin, mcMax);
+    log('Erro ao buscar tokens: ' + e.message, 'error');
+    toast('Erro ao buscar tokens — verifique a conexão com o Railway', 'error');
+    state.previewTokens = [];
   }
 
   renderPreview();
@@ -1887,7 +1899,11 @@ function saveSettings() {
   state.config.rpc = document.getElementById('cfg-rpc').value.trim();
   state.config.privkey = document.getElementById('cfg-privkey').value.trim();
 
-  // Salva backendUrl e rpc no localStorage (privkey nunca é salva localmente)
+  if (!state.config.backendUrl) {
+    toast('Preencha a URL do Railway primeiro', 'error');
+    return;
+  }
+
   localStorage.setItem('solhunter_config', JSON.stringify({
     backendUrl: state.config.backendUrl,
     rpc: state.config.rpc
@@ -1895,7 +1911,6 @@ function saveSettings() {
 
   document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Conectando...</span>';
 
-  // Envia RPC e PrivKey para o Railway
   fetch(api('/config'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
