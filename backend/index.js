@@ -18,7 +18,17 @@ const wallet  = require('./wallet');
 const db      = require('./db');
 
 const app = express();
-app.use(cors({ origin: "*", methods: ["GET","POST","OPTIONS"], allowedHeaders: ["Content-Type","Authorization"] }));
+// CORS — libera qualquer origem para GET, POST e OPTIONS
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
+// Preflight explícito para todas as rotas
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Serve dashboard estático (quando rodando local)
