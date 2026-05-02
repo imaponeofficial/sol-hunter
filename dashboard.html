@@ -1,0 +1,1950 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOL Hunter — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b0f;
+    --surface: #0d1117;
+    --surface2: #131a24;
+    --surface3: #1a2435;
+    --border: #1e2d42;
+    --border2: #243550;
+    --accent: #00ff88;
+    --accent2: #00c8ff;
+    --accent3: #ff6b35;
+    --accent4: #ffd700;
+    --danger: #ff3b5c;
+    --text: #e8f0fe;
+    --text2: #7a9bb5;
+    --text3: #4a6580;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .orb1 { width: 600px; height: 600px; background: rgba(0,255,136,0.04); top: -200px; left: -200px; }
+  .orb2 { width: 500px; height: 500px; background: rgba(0,200,255,0.04); bottom: -100px; right: -100px; }
+
+  /* Layout */
+  .app { position: relative; z-index: 1; display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    padding: 24px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo-text {
+    font-family: var(--sans);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .logo-text span { color: var(--accent); }
+  .logo-sub {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    margin-top: 3px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .nav { flex: 1; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    border: 1px solid transparent;
+    letter-spacing: 0.3px;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active {
+    background: rgba(0,255,136,0.08);
+    color: var(--accent);
+    border-color: rgba(0,255,136,0.2);
+  }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+
+  .nav-section {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 12px 6px;
+  }
+
+  /* Status indicator */
+  .status-bar {
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    margin-bottom: 8px;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  .dot.green { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .dot.blue { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+  .dot.red { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Main content */
+  .main {
+    margin-left: 220px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .topbar-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.3px;
+  }
+  .topbar-title span { color: var(--text3); font-weight: 400; margin-left: 6px; font-size: 12px; }
+
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+
+  .wallet-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+    background: var(--surface2);
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .wallet-badge:hover { border-color: var(--accent); color: var(--accent); }
+
+  .sol-balance {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* Page content */
+  .page { display: none; padding: 28px; animation: fadeIn 0.3s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .stat-card.green::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .stat-card.blue::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .stat-card.orange::before { background: linear-gradient(90deg, var(--accent3), transparent); }
+  .stat-card.gold::before { background: linear-gradient(90deg, var(--accent4), transparent); }
+
+  .stat-label { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+  .stat-value { font-family: var(--mono); font-size: 26px; font-weight: 700; }
+  .stat-value.green { color: var(--accent); }
+  .stat-value.blue { color: var(--accent2); }
+  .stat-value.orange { color: var(--accent3); }
+  .stat-value.gold { color: var(--accent4); }
+  .stat-sub { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 4px; }
+
+  /* Section header */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .section-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    background: var(--surface2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  /* Form elements */
+  label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  input, select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 13px;
+    outline: none;
+    transition: all 0.2s;
+  }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,255,136,0.08); }
+  input::placeholder { color: var(--text3); }
+  select option { background: var(--surface2); }
+
+  .form-grid { display: grid; gap: 16px; }
+  .form-grid.cols2 { grid-template-columns: 1fr 1fr; }
+  .form-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-grid.cols4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+  .form-group { display: flex; flex-direction: column; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 20px;
+    border-radius: 8px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #00e07a; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,255,136,0.3); }
+  .btn-danger {
+    background: var(--danger);
+    color: #fff;
+  }
+  .btn-danger:hover { background: #ff2248; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255,59,92,0.3); }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn-blue {
+    background: var(--accent2);
+    color: #000;
+  }
+  .btn-blue:hover { background: #00aadd; transform: translateY(-1px); }
+  .btn-gold {
+    background: var(--accent4);
+    color: #000;
+  }
+  .btn-gold:hover { background: #e6c200; transform: translateY(-1px); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+  .btn-sm { padding: 7px 14px; font-size: 12px; }
+  .btn-lg { padding: 14px 28px; font-size: 15px; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 12px 16px;
+    text-align: left;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .badge-green { background: rgba(0,255,136,0.1); color: var(--accent); border: 1px solid rgba(0,255,136,0.2); }
+  .badge-red { background: rgba(255,59,92,0.1); color: var(--danger); border: 1px solid rgba(255,59,92,0.2); }
+  .badge-blue { background: rgba(0,200,255,0.1); color: var(--accent2); border: 1px solid rgba(0,200,255,0.2); }
+  .badge-gold { background: rgba(255,215,0,0.1); color: var(--accent4); border: 1px solid rgba(255,215,0,0.2); }
+  .badge-gray { background: rgba(122,155,181,0.1); color: var(--text2); border: 1px solid rgba(122,155,181,0.2); }
+
+  /* Divider */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  /* Progress */
+  .progress-bar {
+    background: var(--surface2);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.5s ease;
+  }
+
+  /* Target config */
+  .target-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+  }
+  .target-block.active-target { border-color: rgba(0,255,136,0.3); }
+  .target-num {
+    position: absolute;
+    top: -10px;
+    left: 14px;
+    background: var(--accent);
+    color: #000;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* Toast */
+  #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+  .toast {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    min-width: 280px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideIn 0.3s ease;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .toast.success { border-color: rgba(0,255,136,0.3); }
+  .toast.error { border-color: rgba(255,59,92,0.3); }
+  @keyframes slideIn { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+
+  /* Monitor grid */
+  .monitor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; max-height: 500px; overflow-y: auto; padding-right: 4px; }
+  .monitor-grid::-webkit-scrollbar { width: 4px; }
+  .monitor-grid::-webkit-scrollbar-track { background: var(--surface2); }
+  .monitor-grid::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .token-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .token-card:hover { border-color: var(--border2); }
+  .token-card.pumping { border-color: rgba(0,255,136,0.4); animation: glow 1s ease-in-out infinite alternate; }
+  @keyframes glow { from{box-shadow:0 0 5px rgba(0,255,136,0.1)} to{box-shadow:0 0 15px rgba(0,255,136,0.3)} }
+
+  .token-addr { font-family: var(--mono); font-size: 9px; color: var(--text3); margin-bottom: 6px; }
+  .token-mc { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); }
+  .token-change { font-family: var(--mono); font-size: 11px; margin-top: 3px; }
+  .token-change.up { color: var(--accent); }
+  .token-change.down { color: var(--danger); }
+  .token-targets { margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+
+  /* Log feed */
+  .log-feed {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    height: 220px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .log-feed::-webkit-scrollbar { width: 4px; }
+  .log-feed::-webkit-scrollbar-track { background: transparent; }
+  .log-feed::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .log-line { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; gap: 10px; }
+  .log-time { color: var(--text3); flex-shrink: 0; }
+  .log-msg.info { color: var(--text2); }
+  .log-msg.success { color: var(--accent); }
+  .log-msg.warn { color: var(--accent4); }
+  .log-msg.error { color: var(--danger); }
+
+  /* Toggle */
+  .toggle-group { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 8px; border: 1px solid var(--border); }
+  .toggle-btn {
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text3);
+    transition: all 0.2s;
+  }
+  .toggle-btn.active { background: var(--surface3); color: var(--text); border: 1px solid var(--border); }
+
+  /* Range input */
+  input[type=range] {
+    padding: 0;
+    height: 4px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* Checkbox */
+  .checkbox-wrap { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .checkbox-wrap input[type=checkbox] { width: auto; accent-color: var(--accent); cursor: pointer; }
+  .checkbox-wrap span { font-family: var(--mono); font-size: 12px; color: var(--text2); }
+
+  /* Info box */
+  .info-box {
+    background: rgba(0,200,255,0.05);
+    border: 1px solid rgba(0,200,255,0.15);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .warn-box {
+    background: rgba(255,107,53,0.05);
+    border: 1px solid rgba(255,107,53,0.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent3);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  /* Scan animation */
+  .scanning-bar {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    background-size: 200% 100%;
+    animation: scan 2s linear infinite;
+  }
+  @keyframes scan { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* Cycle timer */
+  .cycle-ring {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: conic-gradient(var(--accent) 0%, var(--surface2) 0%);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .cycle-ring-inner {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .flex { display: flex; }
+  .flex-center { display: flex; align-items: center; }
+  .flex-between { display: flex; align-items: center; justify-content: space-between; }
+  .gap4 { gap: 4px; }
+  .gap8 { gap: 8px; }
+  .gap12 { gap: 12px; }
+  .gap16 { gap: 16px; }
+  .gap20 { gap: 20px; }
+  .mb8 { margin-bottom: 8px; }
+  .mb12 { margin-bottom: 12px; }
+  .mb16 { margin-bottom: 16px; }
+  .mb20 { margin-bottom: 20px; }
+  .mt12 { margin-top: 12px; }
+  .mt16 { margin-top: 16px; }
+  .w100 { width: 100%; }
+  .text-right { text-align: right; }
+  .text-mono { font-family: var(--mono); }
+  .text-sm { font-size: 11px; }
+  .text-xs { font-size: 10px; }
+  .color-accent { color: var(--accent); }
+  .color-text2 { color: var(--text2); }
+  .color-text3 { color: var(--text3); }
+  .color-danger { color: var(--danger); }
+  .color-gold { color: var(--accent4); }
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<div id="toast-container"></div>
+
+<div class="app">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-text">SOL<span>Hunter</span></div>
+      <div class="logo-sub">Solana Trading System</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">Painel</div>
+      <div class="nav-item active" onclick="navigate('overview')">
+        <span class="icon">◈</span> Visão Geral
+      </div>
+      <div class="nav-item" onclick="navigate('monitor')">
+        <span class="icon">◉</span> Monitor
+      </div>
+
+      <div class="nav-section" style="margin-top:8px">Operações</div>
+      <div class="nav-item" onclick="navigate('buy')">
+        <span class="icon">↗</span> Compras
+      </div>
+      <div class="nav-item" onclick="navigate('sell')">
+        <span class="icon">↘</span> Vendas
+      </div>
+      <div class="nav-item" onclick="navigate('targets')">
+        <span class="icon">◎</span> Alvos
+      </div>
+
+      <div class="nav-section" style="margin-top:8px">Sistema</div>
+      <div class="nav-item" onclick="navigate('wallet')">
+        <span class="icon">◇</span> Carteira Fonte
+      </div>
+      <div class="nav-item" onclick="navigate('settings')">
+        <span class="icon">◆</span> Configurações
+      </div>
+    </nav>
+
+    <div class="status-bar">
+      <div class="status-item"><div class="dot green"></div> Monitor ativo</div>
+      <div class="status-item" id="sidebar-token-count"><div class="dot blue"></div> <span id="sc-tokens">0</span> tokens</div>
+      <div class="status-item"><div class="dot" id="rpc-dot" style="background:var(--text3)"></div> <span id="rpc-status">RPC offline</span></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title">
+        <span id="page-title">Visão Geral</span>
+        <span id="page-sub"></span>
+      </div>
+      <div class="topbar-right">
+        <div class="flex-center gap8">
+          <div class="dot green"></div>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text2)">Próximo ciclo: <span id="next-cycle" class="color-accent">—</span></span>
+        </div>
+        <div class="wallet-badge" onclick="navigate('settings')" id="wallet-display">⬡ Conectar carteira</div>
+        <div class="sol-balance" id="sol-balance">— SOL</div>
+      </div>
+    </div>
+
+    <!-- ===== OVERVIEW ===== -->
+    <div class="page active" id="page-overview">
+      <div class="stats-row">
+        <div class="stat-card green">
+          <div class="stat-label">Tokens na Carteira</div>
+          <div class="stat-value green" id="stat-tokens">0</div>
+          <div class="stat-sub">monitorados</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-label">Vendas Hoje</div>
+          <div class="stat-value blue" id="stat-sells">0</div>
+          <div class="stat-sub">execuções</div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-label">Lucro Realizado</div>
+          <div class="stat-value orange" id="stat-profit">$0.00</div>
+          <div class="stat-sub">USD estimado</div>
+        </div>
+        <div class="stat-card gold">
+          <div class="stat-label">Alertas Atingidos</div>
+          <div class="stat-value gold" id="stat-alerts">0</div>
+          <div class="stat-sub">alvos disparados</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="card">
+          <div class="section-header mb12">
+            <div class="section-title">Log de Atividade</div>
+            <button class="btn btn-secondary btn-sm" onclick="clearLog()">Limpar</button>
+          </div>
+          <div class="log-feed" id="log-feed">
+            <div class="log-line">
+              <span class="log-time">--:--:--</span>
+              <span class="log-msg info">Sistema inicializado. Configure sua carteira para começar.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-header mb12">
+            <div class="section-title">Ciclo de Monitoramento</div>
+          </div>
+          <div class="flex-center gap20 mb16">
+            <div class="cycle-ring" id="cycle-ring">
+              <div class="cycle-ring-inner" id="cycle-seconds">120s</div>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text)">A cada 2 minutos</div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:4px">Consulta Jupiter Price API</div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">Lotes de até 100 tokens/req</div>
+            </div>
+          </div>
+          <div class="scanning-bar"></div>
+          <div class="mt12">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:8px;letter-spacing:1px">ÚLTIMAS VERIFICAÇÕES</div>
+            <div id="last-checks" style="font-family:var(--mono);font-size:11px;color:var(--text2)">Nenhum ciclo executado ainda.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt12" style="margin-top:20px">
+        <div class="section-header mb12">
+          <div class="section-title">Vendas Recentes</div>
+          <span class="section-badge" id="sales-badge">0 vendas</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th>Market Cap Entrada</th>
+                <th>Market Cap Saída</th>
+                <th>% Vendido</th>
+                <th>Alvo</th>
+                <th>Status</th>
+                <th>Hora</th>
+              </tr>
+            </thead>
+            <tbody id="sales-table">
+              <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Nenhuma venda executada ainda</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MONITOR ===== -->
+    <div class="page" id="page-monitor">
+      <div class="flex-between mb20">
+        <div>
+          <div class="section-title" style="font-size:16px">Monitor de Tokens</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-top:4px"><span id="monitor-count">0</span> tokens · Atualiza a cada 2 min</div>
+        </div>
+        <div class="flex-center gap12">
+          <div class="toggle-group">
+            <button class="toggle-btn active" onclick="setMonitorView('grid',this)">Grade</button>
+            <button class="toggle-btn" onclick="setMonitorView('table',this)">Tabela</button>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="forceRefresh()">↺ Atualizar Agora</button>
+        </div>
+      </div>
+
+      <div class="card mb16" style="padding:16px">
+        <div class="flex-center gap16">
+          <div class="form-group" style="flex:1">
+            <label>Filtrar por endereço</label>
+            <input type="text" placeholder="Cole o endereço..." id="monitor-filter">
+          </div>
+          <div class="form-group" style="width:160px">
+            <label>Ordenar por</label>
+            <select id="monitor-sort" onchange="sortMonitor()">
+              <option value="mc-desc">Market Cap ↓</option>
+              <option value="mc-asc">Market Cap ↑</option>
+              <option value="change-desc">Variação ↓</option>
+              <option value="alpha">Alfabético</option>
+            </select>
+          </div>
+          <div class="form-group" style="width:160px">
+            <label>Mostrar</label>
+            <select id="monitor-show">
+              <option value="all">Todos</option>
+              <option value="pumping">Em alta</option>
+              <option value="near-target">Perto de alvo</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid view -->
+      <div id="monitor-grid-view">
+        <div class="monitor-grid" id="token-grid">
+          <div style="grid-column:1/-1;text-align:center;padding:48px;font-family:var(--mono);font-size:13px;color:var(--text3)">
+            Nenhum token monitorado ainda.<br><span style="font-size:11px">Use a aba Compras para adicionar tokens.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table view -->
+      <div id="monitor-table-view" style="display:none">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th>Market Cap</th>
+                <th>Variação 24h</th>
+                <th>Alvo 1</th>
+                <th>Alvo 2</th>
+                <th>Alvo 3</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="monitor-table-body">
+              <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Nenhum token</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== BUY ===== -->
+    <div class="page" id="page-buy">
+      <div class="info-box mb20">
+        <span>ℹ</span>
+        <span>Cole o endereço de uma carteira-fonte. O sistema listará os tokens dela, aplicará os filtros de market cap e comprará automaticamente — pulando os que você já possui.</span>
+      </div>
+
+      <div class="card">
+        <div class="section-title mb16">Configurar Compra em Lote</div>
+
+        <div class="form-grid cols2 mb20">
+          <div class="form-group">
+            <label>Carteira Fonte (endereço Solana)</label>
+            <input type="text" id="buy-source-wallet" placeholder="Ex: 7xKXt...">
+          </div>
+          <div class="form-group">
+            <label>Valor por Token (SOL)</label>
+            <input type="number" id="buy-amount-sol" placeholder="Ex: 0.01" step="0.001" min="0.001" value="0.01">
+          </div>
+        </div>
+
+        <div class="form-grid cols3 mb20">
+          <div class="form-group">
+            <label>Quantidade de Tokens a Comprar</label>
+            <input type="number" id="buy-qty" placeholder="Ex: 50" min="1" max="500" value="50">
+          </div>
+          <div class="form-group">
+            <label>Market Cap Mínimo (USD)</label>
+            <input type="number" id="buy-mc-min" placeholder="Ex: 2000" value="2000">
+          </div>
+          <div class="form-group">
+            <label>Market Cap Máximo (USD)</label>
+            <input type="number" id="buy-mc-max" placeholder="Ex: 3000" value="3000">
+          </div>
+        </div>
+
+        <div class="form-grid cols2 mb20">
+          <div class="form-group">
+            <label>Slippage (%)</label>
+            <input type="number" id="buy-slippage" placeholder="Ex: 15" value="15" min="1" max="50">
+          </div>
+          <div class="form-group">
+            <label>Prioridade de Transação</label>
+            <select id="buy-priority">
+              <option value="low">Baixa (economiza taxas)</option>
+              <option value="medium" selected>Média</option>
+              <option value="high">Alta (mais rápido)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex-center gap12 mb20">
+          <label class="checkbox-wrap">
+            <input type="checkbox" id="buy-skip-owned" checked>
+            <span>Pular tokens que já possuo</span>
+          </label>
+          <label class="checkbox-wrap">
+            <input type="checkbox" id="buy-dry-run">
+            <span>Modo simulação (sem gastar SOL)</span>
+          </label>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Preview area -->
+        <div id="buy-preview" style="display:none" class="mb16">
+          <div class="section-header mb12">
+            <div class="section-title">Preview — Tokens Encontrados</div>
+            <span class="section-badge" id="preview-count">0 elegíveis</span>
+          </div>
+          <div class="table-wrap" style="max-height:280px;overflow-y:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all-preview" onchange="toggleSelectAll()"> Sel</th>
+                  <th>Token</th>
+                  <th>Market Cap</th>
+                  <th>Liquidez</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="preview-table"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="flex gap12">
+          <button class="btn btn-secondary" onclick="previewBuy()" id="btn-preview">🔍 Buscar Tokens da Carteira</button>
+          <button class="btn btn-primary btn-lg" onclick="executeBuy()" id="btn-buy" disabled>↗ Executar Compras</button>
+        </div>
+
+        <!-- Progress during buy -->
+        <div id="buy-progress" style="display:none;margin-top:20px">
+          <div class="flex-between mb8">
+            <span style="font-family:var(--mono);font-size:12px;color:var(--text2)" id="buy-progress-label">Comprando tokens...</span>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--accent)" id="buy-progress-pct">0%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="buy-progress-fill" style="width:0%"></div></div>
+          <div class="log-feed mt12" id="buy-log" style="height:140px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SELL ===== -->
+    <div class="page" id="page-sell">
+      <div class="warn-box mb20">
+        <span>⚠</span>
+        <span>Venda manual em lote. Use isso quando quiser realizar lucros de múltiplos tokens de uma vez. Os alvos automáticos operam separadamente.</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="card">
+          <div class="section-title mb16">Venda em Lote</div>
+
+          <div class="form-group mb16">
+            <label>Quantidade de Tokens a Vender</label>
+            <input type="number" id="sell-qty" placeholder="Ex: 50" min="1" value="50">
+          </div>
+
+          <div class="form-group mb16">
+            <label>Critério de Seleção</label>
+            <select id="sell-criteria">
+              <option value="random">Aleatório</option>
+              <option value="highest-mc">Maior Market Cap primeiro</option>
+              <option value="lowest-mc">Menor Market Cap primeiro</option>
+              <option value="highest-gain">Maior valorização</option>
+            </select>
+          </div>
+
+          <div class="form-group mb16">
+            <label>Market Cap Mínimo para Vender (USD)</label>
+            <input type="number" id="sell-mc-min" placeholder="Deixe 0 para ignorar" value="0">
+          </div>
+
+          <div class="form-group mb20">
+            <label>Slippage (%)</label>
+            <input type="number" id="sell-slippage" value="15" min="1" max="50">
+          </div>
+
+          <div class="flex gap12">
+            <button class="btn btn-secondary" onclick="loadSellPreview()">Visualizar Seleção</button>
+            <button class="btn btn-danger btn-lg" onclick="executeSell()">↘ Vender Agora</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title mb16">Tokens Selecionados para Venda</div>
+          <div class="table-wrap" style="max-height:340px;overflow-y:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Market Cap</th>
+                  <th>Qtd</th>
+                </tr>
+              </thead>
+              <tbody id="sell-preview-table">
+                <tr><td colspan="3" style="text-align:center;color:var(--text3);padding:24px">Clique em "Visualizar Seleção"</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="mt12 flex-between">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">Total selecionado:</span>
+            <span style="font-family:var(--mono);font-size:13px;color:var(--accent)" id="sell-total-count">0 tokens</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <div class="section-title mb12">Venda Seletiva por Endereço</div>
+        <div class="form-grid cols2 mb16">
+          <div class="form-group">
+            <label>Endereço do Token</label>
+            <input type="text" id="sell-specific-addr" placeholder="Mint address do token...">
+          </div>
+          <div class="form-group">
+            <label>% do Saldo a Vender</label>
+            <input type="number" id="sell-specific-pct" value="100" min="1" max="100">
+          </div>
+        </div>
+        <button class="btn btn-danger" onclick="sellSpecific()">Vender Token Específico</button>
+      </div>
+    </div>
+
+    <!-- ===== TARGETS ===== -->
+    <div class="page" id="page-targets">
+      <div class="info-box mb20">
+        <span>◎</span>
+        <span>Os alvos se aplicam a <strong>todos os tokens</strong> monitorados. O sistema verifica o market cap a cada 2 minutos e executa a venda automaticamente quando um alvo é atingido.</span>
+      </div>
+
+      <div class="card mb20">
+        <div class="flex-between mb16">
+          <div class="section-title">Configuração de Alvos</div>
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="t1-btn" onclick="setTargetCount(1)">1 Alvo</button>
+            <button class="toggle-btn" id="t2-btn" onclick="setTargetCount(2)">2 Alvos</button>
+            <button class="toggle-btn" id="t3-btn" onclick="setTargetCount(3)">3 Alvos</button>
+          </div>
+        </div>
+
+        <div id="targets-container" style="display:flex;flex-direction:column;gap:16px">
+          <!-- Target 1 -->
+          <div class="target-block active-target" id="target-1">
+            <div class="target-num">ALVO 1</div>
+            <div class="form-grid cols3" style="margin-top:8px">
+              <div class="form-group">
+                <label>Market Cap Alvo (USD)</label>
+                <input type="number" class="t-mc" id="t1-mc" placeholder="Ex: 50000" value="50000">
+              </div>
+              <div class="form-group">
+                <label>% do Token a Vender</label>
+                <input type="number" class="t-pct" id="t1-pct" placeholder="Ex: 30" value="30" min="1" max="100">
+              </div>
+              <div class="form-group">
+                <label>Slippage (%)</label>
+                <input type="number" id="t1-slip" value="15" min="1" max="50">
+              </div>
+            </div>
+          </div>
+
+          <!-- Target 2 -->
+          <div class="target-block" id="target-2" style="display:none">
+            <div class="target-num" style="background:var(--accent2);color:#000">ALVO 2</div>
+            <div class="form-grid cols3" style="margin-top:8px">
+              <div class="form-group">
+                <label>Market Cap Alvo (USD)</label>
+                <input type="number" class="t-mc" id="t2-mc" placeholder="Ex: 100000" value="100000">
+              </div>
+              <div class="form-group">
+                <label>% do Token a Vender</label>
+                <input type="number" class="t-pct" id="t2-pct" placeholder="Ex: 40" value="40" min="1" max="100">
+              </div>
+              <div class="form-group">
+                <label>Slippage (%)</label>
+                <input type="number" id="t2-slip" value="15" min="1" max="50">
+              </div>
+            </div>
+          </div>
+
+          <!-- Target 3 -->
+          <div class="target-block" id="target-3" style="display:none">
+            <div class="target-num" style="background:var(--accent4);color:#000">ALVO 3</div>
+            <div class="form-grid cols3" style="margin-top:8px">
+              <div class="form-group">
+                <label>Market Cap Alvo (USD)</label>
+                <input type="number" class="t-mc" id="t3-mc" placeholder="Ex: 500000" value="500000">
+              </div>
+              <div class="form-group">
+                <label>% do Token a Vender</label>
+                <input type="number" class="t-pct" id="t3-pct" placeholder="Ex: 30" value="30" min="1" max="100">
+              </div>
+              <div class="form-group">
+                <label>Slippage (%)</label>
+                <input type="number" id="t3-slip" value="15" min="1" max="50">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="form-grid cols2 mb16">
+          <div class="form-group">
+            <label>Após Último Alvo</label>
+            <select id="after-last-target">
+              <option value="hold">Manter restante (não vender)</option>
+              <option value="sell-all">Vender 100% restante</option>
+              <option value="sell-half">Vender 50% restante</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Stop Loss (Market Cap USD — 0 = desativado)</label>
+            <input type="number" id="stop-loss-mc" value="0" placeholder="Ex: 500 para vender se cair abaixo de $500">
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveTargets()">◎ Salvar Alvos</button>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:12px" id="targets-saved-indicator"></span>
+      </div>
+
+      <!-- Tokens que já atingiram alvos -->
+      <div class="card">
+        <div class="section-header mb12">
+          <div class="section-title">Histórico de Alvos Atingidos</div>
+          <span class="section-badge" id="targets-hit-badge">0 disparos</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th>Alvo</th>
+                <th>MC na Venda</th>
+                <th>% Vendido</th>
+                <th>SOL Recebido</th>
+                <th>Hora</th>
+              </tr>
+            </thead>
+            <tbody id="targets-history">
+              <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Nenhum alvo atingido ainda</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== WALLET SOURCE ===== -->
+    <div class="page" id="page-wallet">
+      <div class="card">
+        <div class="section-title mb16">Carteiras Fonte para Cópia</div>
+        <div class="info-box mb16">
+          <span>ℹ</span>
+          <span>Adicione aqui as carteiras que você analisou e que compram tokens adormecidos. O sistema vai usar elas na aba de Compras para buscar tokens elegíveis.</span>
+        </div>
+
+        <div class="form-grid cols2 mb16">
+          <div class="form-group">
+            <label>Endereço da Carteira</label>
+            <input type="text" id="src-wallet-addr" placeholder="Endereço Solana da carteira fonte...">
+          </div>
+          <div class="form-group">
+            <label>Apelido (opcional)</label>
+            <input type="text" id="src-wallet-name" placeholder="Ex: Baleia #1">
+          </div>
+        </div>
+        <button class="btn btn-primary mb20" onclick="addSourceWallet()">+ Adicionar Carteira</button>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Apelido</th>
+                <th>Endereço</th>
+                <th>Tokens Est.</th>
+                <th>Adicionada em</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="wallets-table">
+              <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">Nenhuma carteira fonte adicionada</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SETTINGS ===== -->
+    <div class="page" id="page-settings">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="card">
+          <div class="section-title mb16">Carteira & RPC</div>
+          <div class="form-group mb16">
+            <label>URL do Backend (Railway)</label>
+            <input type="text" id="cfg-backend-url" placeholder="https://seu-app.up.railway.app">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">URL do seu serviço no Railway</span>
+          </div>
+          <div class="form-group mb16">
+            <label>Chave Privada (Base58)</label>
+            <input type="password" id="cfg-privkey" placeholder="Sua chave privada...">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">Nunca salva localmente — enviada direto ao Railway</span>
+          </div>
+          <div class="form-group mb20">
+            <label>RPC Endpoint (QuickNode)</label>
+            <input type="text" id="cfg-rpc" placeholder="https://...quicknode.pro/...">
+          </div>
+          <div style="background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:8px;padding:12px;margin-bottom:16px">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:4px">✓ SUPABASE CONFIGURADO NO RAILWAY</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Banco de dados conectado via variáveis de ambiente do servidor. Nenhuma configuração necessária aqui.</div>
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()">Salvar & Conectar</button>
+          <div id="settings-status" style="font-family:var(--mono);font-size:11px;margin-top:12px"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-title mb16">Parâmetros Globais</div>
+          <div class="form-group mb16">
+            <label>Intervalo de Monitoramento (segundos)</label>
+            <input type="number" id="cfg-interval" value="120" min="30" max="600">
+          </div>
+          <div class="form-group mb16">
+            <label>Máx. Tokens por Req. Jupiter</label>
+            <input type="number" id="cfg-batch-size" value="100" min="10" max="100" readonly>
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">Fixo em 100 (limite da API)</span>
+          </div>
+          <div class="form-group mb16">
+            <label>Slippage Padrão (%)</label>
+            <input type="number" id="cfg-default-slippage" value="15" min="1" max="50">
+          </div>
+          <div class="form-group mb20">
+            <label>Confirmações para Transação</label>
+            <select id="cfg-commitment">
+              <option value="processed">processed (mais rápido)</option>
+              <option value="confirmed" selected>confirmed</option>
+              <option value="finalized">finalized (mais seguro)</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" onclick="saveGlobalParams()">Salvar Parâmetros</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <div class="section-title mb16">Backend — Estrutura de Arquivos</div>
+        <div class="info-box">
+          <div>
+            <div style="margin-bottom:8px">O backend Node.js deve rodar em paralelo com este dashboard. Estrutura:</div>
+            <pre style="font-size:11px;color:var(--text2);line-height:1.8">
+sol-hunter/
+├── dashboard.html          ← Este arquivo
+├── backend/
+│   ├── index.js            ← Servidor principal (Express)
+│   ├── monitor.js          ← Ciclo de monitoramento (Jupiter API)
+│   ├── buyer.js            ← Lógica de compra (Jupiter Swap)
+│   ├── seller.js           ← Lógica de venda automática
+│   ├── wallet.js           ← Gerenciamento de carteira
+│   ├── db.js               ← Supabase client
+│   └── config.js           ← Configurações
+└── package.json</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// =====================================================
+// STATE
+// =====================================================
+// Helper: monta URL do Railway para todas as chamadas de API
+function api(path) {
+  const base = (state && state.config && state.config.backendUrl)
+    ? state.config.backendUrl
+    : (localStorage.getItem('solhunter_config')
+        ? (JSON.parse(localStorage.getItem('solhunter_config') || '{}').backendUrl || '')
+        : '');
+  return base + path;
+}
+
+const state = {
+  tokens: [],
+  sales: [],
+  targetsHistory: [],
+  sourceWallets: [],
+  targetCount: 1,
+  monitorInterval: null,
+  cycleTimer: null,
+  cycleSeconds: 120,
+  profit: 0,
+  alerts: 0,
+  config: {
+    backendUrl: '',   // URL do Railway (ex: https://sol-hunter.up.railway.app)
+    rpc: '',
+    privkey: '',
+    interval: 120,
+    slippage: 15,
+    commitment: 'confirmed'
+  },
+  targets: [
+    { mc: 50000, pct: 30, slip: 15, hit: {} },
+    { mc: 100000, pct: 40, slip: 15, hit: {} },
+    { mc: 500000, pct: 30, slip: 15, hit: {} }
+  ],
+  previewTokens: [],
+  monitorView: 'grid'
+};
+
+// Load from localStorage
+function loadState() {
+  try {
+    const saved = localStorage.getItem('solhunter_config');
+    if (saved) Object.assign(state.config, JSON.parse(saved));
+    const savedTokens = localStorage.getItem('solhunter_tokens');
+    if (savedTokens) state.tokens = JSON.parse(savedTokens);
+    const savedWallets = localStorage.getItem('solhunter_wallets');
+    if (savedWallets) state.sourceWallets = JSON.parse(savedWallets);
+    const savedTargets = localStorage.getItem('solhunter_targets');
+    if (savedTargets) state.targets = JSON.parse(savedTargets);
+    const savedSales = localStorage.getItem('solhunter_sales');
+    if (savedSales) state.sales = JSON.parse(savedSales);
+
+    // Restore config inputs
+    if (state.config.backendUrl) document.getElementById('cfg-backend-url').value = state.config.backendUrl;
+    if (state.config.rpc) document.getElementById('cfg-rpc').value = state.config.rpc;
+    if (state.config.interval) document.getElementById('cfg-interval').value = state.config.interval;
+    if (state.config.slippage) document.getElementById('cfg-default-slippage').value = state.config.slippage;
+  } catch(e) {}
+}
+
+// =====================================================
+// NAVIGATION
+// =====================================================
+const pageTitles = {
+  overview: ['Visão Geral', ''],
+  monitor: ['Monitor', 'todos os tokens'],
+  buy: ['Compras', 'automáticas em lote'],
+  sell: ['Vendas', 'manual em lote'],
+  targets: ['Alvos', 'automáticos'],
+  wallet: ['Carteiras Fonte', ''],
+  settings: ['Configurações', '']
+};
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick')?.includes(page)) n.classList.add('active');
+  });
+  const [title, sub] = pageTitles[page] || [page, ''];
+  document.getElementById('page-title').textContent = title;
+  document.getElementById('page-sub').textContent = sub;
+
+  if (page === 'monitor') renderMonitor();
+  if (page === 'overview') renderSalesTable();
+}
+
+// =====================================================
+// LOGGING
+// =====================================================
+function log(msg, type = 'info') {
+  const feed = document.getElementById('log-feed');
+  const now = new Date().toTimeString().slice(0,8);
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${type}">${msg}</span>`;
+  feed.insertBefore(line, feed.firstChild);
+  if (feed.children.length > 200) feed.removeChild(feed.lastChild);
+}
+
+function clearLog() { document.getElementById('log-feed').innerHTML = ''; }
+
+function addBuyLog(msg, type = 'info') {
+  const feed = document.getElementById('buy-log');
+  const now = new Date().toTimeString().slice(0,8);
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${type}">${msg}</span>`;
+  feed.insertBefore(line, feed.firstChild);
+}
+
+// =====================================================
+// TOAST
+// =====================================================
+function toast(msg, type = 'success') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ'}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// =====================================================
+// CYCLE TIMER
+// =====================================================
+function startCycleTimer() {
+  let secs = state.config.interval || 120;
+  state.cycleSeconds = secs;
+
+  if (state.cycleTimer) clearInterval(state.cycleTimer);
+  state.cycleTimer = setInterval(() => {
+    secs--;
+    if (secs <= 0) {
+      secs = state.config.interval || 120;
+      runMonitorCycle();
+    }
+    const pct = ((state.config.interval - secs) / state.config.interval) * 100;
+    document.getElementById('cycle-seconds').textContent = secs + 's';
+    document.getElementById('next-cycle').textContent = secs + 's';
+    const ring = document.getElementById('cycle-ring');
+    ring.style.background = `conic-gradient(var(--accent) ${pct}%, var(--surface2) ${pct}%)`;
+  }, 1000);
+}
+
+// =====================================================
+// MONITOR CYCLE — calls backend
+// =====================================================
+async function runMonitorCycle() {
+  if (!state.tokens.length) return;
+  log(`Iniciando ciclo — ${state.tokens.length} tokens`, 'info');
+
+  const BATCH = 100;
+  const mints = state.tokens.map(t => t.mint);
+
+  for (let i = 0; i < mints.length; i += BATCH) {
+    const batch = mints.slice(i, i + BATCH);
+    try {
+      const url = `https://price.jup.ag/v6/price?ids=${batch.join(',')}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      for (const [mint, priceData] of Object.entries(data.data || {})) {
+        const token = state.tokens.find(t => t.mint === mint);
+        if (!token) continue;
+        const mc = priceData.price * (token.supply || 1e9);
+        token.mc = mc;
+        token.price = priceData.price;
+        checkTargets(token);
+      }
+    } catch(e) {
+      log(`Erro ao buscar preços (lote ${Math.floor(i/BATCH)+1}): ${e.message}`, 'error');
+    }
+  }
+
+  saveTokens();
+  renderMonitor();
+  updateStats();
+  updateLastChecks();
+  log(`Ciclo concluído — ${state.tokens.length} tokens verificados`, 'success');
+}
+
+// =====================================================
+// TARGET CHECKING
+// =====================================================
+function checkTargets(token) {
+  const count = state.targetCount;
+  for (let i = 0; i < count; i++) {
+    const t = state.targets[i];
+    const key = `t${i+1}`;
+    if (token.targetHit?.[key]) continue; // já disparou este alvo
+    if (token.mc >= t.mc) {
+      log(`🎯 ALVO ${i+1} atingido! ${shortAddr(token.mint)} — MC: $${fmtNum(token.mc)}`, 'success');
+      toast(`Alvo ${i+1} atingido! ${shortAddr(token.mint)}`, 'success');
+      state.alerts++;
+      document.getElementById('stat-alerts').textContent = state.alerts;
+
+      // Mark hit
+      if (!token.targetHit) token.targetHit = {};
+      token.targetHit[key] = true;
+
+      // Record in history
+      const record = {
+        mint: token.mint,
+        target: i+1,
+        mc: token.mc,
+        pct: t.pct,
+        sol: '~',
+        time: new Date().toTimeString().slice(0,8)
+      };
+      state.targetsHistory.unshift(record);
+      renderTargetsHistory();
+
+      // Call backend to execute sell
+      triggerSell(token, t);
+    }
+  }
+}
+
+async function triggerSell(token, target) {
+  log(`Executando venda automática: ${shortAddr(token.mint)} — ${target.pct}%`, 'warn');
+  try {
+    const res = await fetch(api('/sell'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mint: token.mint, pct: target.pct, slippage: target.slip })
+    });
+    if (res.ok) {
+      const d = await res.json();
+      log(`Venda OK: ${shortAddr(token.mint)} — ${d.txid || 'OK'}`, 'success');
+      state.profit += d.solReceived || 0;
+      document.getElementById('stat-profit').textContent = '$' + (state.profit * 50).toFixed(2);
+    }
+  } catch(e) {
+    log(`[SIMULAÇÃO] Venda disparada para ${shortAddr(token.mint)}`, 'warn');
+  }
+}
+
+// =====================================================
+// BUY FLOW
+// =====================================================
+async function previewBuy() {
+  const wallet = document.getElementById('buy-source-wallet').value.trim();
+  const qty = parseInt(document.getElementById('buy-qty').value) || 50;
+  const mcMin = parseFloat(document.getElementById('buy-mc-min').value) || 2000;
+  const mcMax = parseFloat(document.getElementById('buy-mc-max').value) || 3000;
+
+  if (!wallet) { toast('Cole o endereço da carteira fonte', 'error'); return; }
+
+  const btn = document.getElementById('btn-preview');
+  btn.textContent = '⟳ Buscando...';
+  btn.disabled = true;
+
+  log(`Buscando tokens da carteira: ${shortAddr(wallet)}`, 'info');
+
+  try {
+    const res = await fetch(api(`/wallet-tokens?address=${wallet}&mcMin=${mcMin}&mcMax=${mcMax}&limit=${qty}`);
+    if (!res.ok) throw new Error('Backend não disponível');
+    const data = await res.json();
+    state.previewTokens = data.tokens || [];
+  } catch(e) {
+    // Simulate preview when backend not running
+    log('Backend offline — usando dados simulados', 'warn');
+    state.previewTokens = simulateTokens(qty, mcMin, mcMax);
+  }
+
+  renderPreview();
+  btn.textContent = '🔍 Buscar Tokens da Carteira';
+  btn.disabled = false;
+}
+
+function simulateTokens(qty, mcMin, mcMax) {
+  const owned = state.tokens.map(t => t.mint);
+  const tokens = [];
+  for (let i = 0; i < qty; i++) {
+    const mint = 'Sim' + Math.random().toString(36).slice(2,12);
+    const alreadyOwned = owned.includes(mint);
+    tokens.push({
+      mint,
+      mc: Math.random() * (mcMax - mcMin) + mcMin,
+      liquidity: Math.random() * 1000 + 500,
+      alreadyOwned
+    });
+  }
+  return tokens;
+}
+
+function renderPreview() {
+  const tbody = document.getElementById('preview-table');
+  const skipOwned = document.getElementById('buy-skip-owned').checked;
+  const eligible = state.previewTokens.filter(t => !skipOwned || !t.alreadyOwned);
+
+  document.getElementById('preview-count').textContent = `${eligible.length} elegíveis`;
+  document.getElementById('buy-preview').style.display = 'block';
+  document.getElementById('btn-buy').disabled = false;
+
+  tbody.innerHTML = eligible.map(t => `
+    <tr>
+      <td><input type="checkbox" class="preview-check" value="${t.mint}" checked></td>
+      <td style="font-family:var(--mono);font-size:11px">${shortAddr(t.mint)}</td>
+      <td><span class="badge badge-blue">$${fmtNum(t.mc)}</span></td>
+      <td style="color:var(--text2)">$${fmtNum(t.liquidity || 0)}</td>
+      <td>${t.alreadyOwned ? '<span class="badge badge-gray">Já possuo</span>' : '<span class="badge badge-green">Elegível</span>'}</td>
+    </tr>
+  `).join('');
+}
+
+function toggleSelectAll() {
+  const val = document.getElementById('select-all-preview').checked;
+  document.querySelectorAll('.preview-check').forEach(c => c.checked = val);
+}
+
+async function executeBuy() {
+  const amountSol = parseFloat(document.getElementById('buy-amount-sol').value) || 0.01;
+  const slippage = parseInt(document.getElementById('buy-slippage').value) || 15;
+  const priority = document.getElementById('buy-priority').value;
+  const dryRun = document.getElementById('buy-dry-run').checked;
+
+  const selected = [...document.querySelectorAll('.preview-check:checked')].map(c => c.value);
+  if (!selected.length) { toast('Nenhum token selecionado', 'error'); return; }
+
+  document.getElementById('buy-progress').style.display = 'block';
+  document.getElementById('btn-buy').disabled = true;
+
+  log(`Iniciando compra de ${selected.length} tokens — ${amountSol} SOL cada${dryRun ? ' [SIMULAÇÃO]' : ''}`, 'info');
+
+  let done = 0;
+  for (const mint of selected) {
+    done++;
+    const pct = Math.round((done / selected.length) * 100);
+    document.getElementById('buy-progress-fill').style.width = pct + '%';
+    document.getElementById('buy-progress-pct').textContent = pct + '%';
+    document.getElementById('buy-progress-label').textContent = `Comprando ${done}/${selected.length}...`;
+
+    try {
+      if (!dryRun) {
+        const res = await fetch(api('/buy'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mint, amountSol, slippage, priority })
+        });
+        if (res.ok) {
+          addBuyLog(`✓ ${shortAddr(mint)} — comprado`, 'success');
+          addTokenToMonitor(mint);
+        } else {
+          addBuyLog(`✗ ${shortAddr(mint)} — falhou`, 'error');
+        }
+      } else {
+        await sleep(80);
+        addBuyLog(`[SIM] ${shortAddr(mint)} — simulado OK`, 'warn');
+        addTokenToMonitor(mint);
+      }
+    } catch(e) {
+      await sleep(80);
+      addBuyLog(`[SIM] ${shortAddr(mint)} — sem backend`, 'warn');
+      addTokenToMonitor(mint);
+    }
+  }
+
+  saveTokens();
+  updateStats();
+  document.getElementById('btn-buy').disabled = false;
+  document.getElementById('buy-progress-label').textContent = `Concluído! ${selected.length} tokens processados.`;
+  toast(`${selected.length} tokens adicionados ao monitor`, 'success');
+  log(`Compra concluída — ${selected.length} tokens`, 'success');
+}
+
+function addTokenToMonitor(mint) {
+  if (!state.tokens.find(t => t.mint === mint)) {
+    state.tokens.push({ mint, mc: 0, price: 0, supply: 1e9, targetHit: {} });
+    document.getElementById('stat-tokens').textContent = state.tokens.length;
+    document.getElementById('sc-tokens').textContent = state.tokens.length;
+    document.getElementById('monitor-count').textContent = state.tokens.length;
+  }
+}
+
+// =====================================================
+// SELL
+// =====================================================
+function loadSellPreview() {
+  const qty = parseInt(document.getElementById('sell-qty').value) || 50;
+  const criteria = document.getElementById('sell-criteria').value;
+  const mcMin = parseFloat(document.getElementById('sell-mc-min').value) || 0;
+
+  let eligible = state.tokens.filter(t => t.mc >= mcMin);
+  if (criteria === 'highest-mc') eligible.sort((a,b) => b.mc - a.mc);
+  else if (criteria === 'lowest-mc') eligible.sort((a,b) => a.mc - b.mc);
+  else eligible.sort(() => Math.random() - 0.5);
+
+  const selected = eligible.slice(0, qty);
+  document.getElementById('sell-total-count').textContent = selected.length + ' tokens';
+
+  const tbody = document.getElementById('sell-preview-table');
+  tbody.innerHTML = selected.map(t => `
+    <tr>
+      <td style="font-family:var(--mono);font-size:11px">${shortAddr(t.mint)}</td>
+      <td><span class="badge badge-blue">$${fmtNum(t.mc)}</span></td>
+      <td style="color:var(--text2)">—</td>
+    </tr>
+  `).join('') || `<tr><td colspan="3" style="text-align:center;color:var(--text3)">Nenhum token</td></tr>`;
+}
+
+async function executeSell() {
+  const qty = parseInt(document.getElementById('sell-qty').value) || 50;
+  const slippage = parseInt(document.getElementById('sell-slippage').value) || 15;
+  log(`Venda manual em lote: ${qty} tokens`, 'warn');
+  toast(`Venda de ${qty} tokens iniciada`, 'warn');
+  // Would call backend /api/sell-batch
+}
+
+async function sellSpecific() {
+  const addr = document.getElementById('sell-specific-addr').value.trim();
+  const pct = parseInt(document.getElementById('sell-specific-pct').value) || 100;
+  if (!addr) { toast('Cole o endereço do token', 'error'); return; }
+  log(`Venda específica: ${shortAddr(addr)} — ${pct}%`, 'warn');
+  toast(`Venda de ${pct}% de ${shortAddr(addr)} iniciada`, 'warn');
+}
+
+// =====================================================
+// TARGETS
+// =====================================================
+function setTargetCount(n) {
+  state.targetCount = n;
+  ['t1-btn','t2-btn','t3-btn'].forEach((id, i) => {
+    document.getElementById(id).classList.toggle('active', i < n);
+  });
+  ['target-1','target-2','target-3'].forEach((id, i) => {
+    document.getElementById(id).style.display = i < n ? 'block' : 'none';
+  });
+}
+
+function saveTargets() {
+  for (let i = 0; i < 3; i++) {
+    state.targets[i].mc = parseFloat(document.getElementById(`t${i+1}-mc`).value) || 0;
+    state.targets[i].pct = parseFloat(document.getElementById(`t${i+1}-pct`).value) || 30;
+    state.targets[i].slip = parseFloat(document.getElementById(`t${i+1}-slip`).value) || 15;
+  }
+  localStorage.setItem('solhunter_targets', JSON.stringify(state.targets));
+  document.getElementById('targets-saved-indicator').textContent = '✓ Alvos salvos às ' + new Date().toTimeString().slice(0,8);
+  document.getElementById('targets-saved-indicator').style.color = 'var(--accent)';
+  toast('Alvos salvos com sucesso!', 'success');
+}
+
+function renderTargetsHistory() {
+  const tbody = document.getElementById('targets-history');
+  document.getElementById('targets-hit-badge').textContent = state.targetsHistory.length + ' disparos';
+  if (!state.targetsHistory.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Nenhum alvo atingido ainda</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.targetsHistory.slice(0, 50).map(r => `
+    <tr>
+      <td style="font-family:var(--mono);font-size:11px">${shortAddr(r.mint)}</td>
+      <td><span class="badge badge-${r.target===1?'green':r.target===2?'blue':'gold'}">Alvo ${r.target}</span></td>
+      <td><span class="badge badge-blue">$${fmtNum(r.mc)}</span></td>
+      <td>${r.pct}%</td>
+      <td>${r.sol} SOL</td>
+      <td style="color:var(--text3)">${r.time}</td>
+    </tr>
+  `).join('');
+}
+
+// =====================================================
+// SOURCE WALLETS
+// =====================================================
+function addSourceWallet() {
+  const addr = document.getElementById('src-wallet-addr').value.trim();
+  const name = document.getElementById('src-wallet-name').value.trim() || `Carteira ${state.sourceWallets.length + 1}`;
+  if (!addr) { toast('Cole o endereço da carteira', 'error'); return; }
+
+  state.sourceWallets.push({ addr, name, added: new Date().toLocaleDateString('pt-BR') });
+  localStorage.setItem('solhunter_wallets', JSON.stringify(state.sourceWallets));
+  renderWallets();
+  document.getElementById('src-wallet-addr').value = '';
+  document.getElementById('src-wallet-name').value = '';
+  toast(`Carteira "${name}" adicionada`, 'success');
+}
+
+function removeWallet(i) {
+  state.sourceWallets.splice(i, 1);
+  localStorage.setItem('solhunter_wallets', JSON.stringify(state.sourceWallets));
+  renderWallets();
+}
+
+function renderWallets() {
+  const tbody = document.getElementById('wallets-table');
+  if (!state.sourceWallets.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">Nenhuma carteira fonte adicionada</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.sourceWallets.map((w, i) => `
+    <tr>
+      <td style="font-weight:700">${w.name}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${shortAddr(w.addr, 16)}</td>
+      <td style="color:var(--text3)">—</td>
+      <td style="color:var(--text3)">${w.added}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('buy-source-wallet').value='${w.addr}';navigate('buy')">Usar</button>
+        <button class="btn btn-danger btn-sm" onclick="removeWallet(${i})">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// =====================================================
+// SETTINGS
+// =====================================================
+function saveSettings() {
+  state.config.backendUrl = (document.getElementById('cfg-backend-url').value || '').trim().replace(/\/$/, '');
+  state.config.rpc = document.getElementById('cfg-rpc').value.trim();
+  state.config.privkey = document.getElementById('cfg-privkey').value.trim();
+
+  // Salva backendUrl e rpc no localStorage (privkey nunca é salva localmente)
+  localStorage.setItem('solhunter_config', JSON.stringify({
+    backendUrl: state.config.backendUrl,
+    rpc: state.config.rpc
+  }));
+
+  document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Conectando...</span>';
+
+  // Envia RPC e PrivKey para o Railway
+  fetch(api('/config'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rpc: state.config.rpc, privateKey: state.config.privkey })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) {
+      document.getElementById('wallet-display').textContent = '⬡ ' + (d.publicKey ? d.publicKey.slice(0,8) + '...' : 'Carteira configurada');
+      document.getElementById('settings-status').innerHTML = '<span style="color:var(--accent)">✓ Conectado — ' + (d.publicKey || '') + '</span>';
+      document.getElementById('rpc-dot').style.background = 'var(--accent)';
+      document.getElementById('rpc-status').textContent = 'Railway conectado';
+      toast('Conectado com sucesso!', 'success');
+      log('Backend Railway conectado — ' + (d.publicKey || ''), 'success');
+      startCycleTimer();
+    } else {
+      document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + (d.message || 'Erro') + '</span>';
+      toast('Erro ao conectar: ' + (d.message || ''), 'error');
+    }
+  })
+  .catch(e => {
+    document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ Sem resposta do Railway — verifique a URL</span>';
+    toast('Railway offline ou URL incorreta', 'error');
+    log('Erro ao conectar ao Railway: ' + e.message, 'error');
+  });
+}
+
+function saveGlobalParams() {
+  state.config.interval = parseInt(document.getElementById('cfg-interval').value) || 120;
+  state.config.slippage = parseInt(document.getElementById('cfg-default-slippage').value) || 15;
+  state.config.commitment = document.getElementById('cfg-commitment').value;
+  toast('Parâmetros globais salvos!', 'success');
+  startCycleTimer();
+}
+
+// =====================================================
+// MONITOR
+// =====================================================
+function renderMonitor() {
+  const tokens = state.tokens;
+  document.getElementById('monitor-count').textContent = tokens.length;
+
+  if (state.monitorView === 'grid') {
+    const grid = document.getElementById('token-grid');
+    if (!tokens.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px;font-family:var(--mono);font-size:13px;color:var(--text3)">Nenhum token monitorado ainda.<br><span style="font-size:11px">Use a aba Compras para adicionar tokens.</span></div>';
+      return;
+    }
+    grid.innerHTML = tokens.map(t => {
+      const change = t.prevMc ? ((t.mc - t.prevMc) / t.prevMc * 100).toFixed(1) : '0.0';
+      const pumping = parseFloat(change) > 20;
+      return `
+        <div class="token-card ${pumping ? 'pumping' : ''}">
+          <div class="token-addr">${shortAddr(t.mint)}</div>
+          <div class="token-mc">$${fmtNum(t.mc)}</div>
+          <div class="token-change ${parseFloat(change) >= 0 ? 'up' : 'down'}">${parseFloat(change) >= 0 ? '+' : ''}${change}%</div>
+          <div class="token-targets">
+            ${state.targets.slice(0, state.targetCount).map((tg, i) => {
+              const hit = t.targetHit?.[`t${i+1}`];
+              return `<span class="badge ${hit ? 'badge-green' : 'badge-gray'}" style="font-size:9px">${hit ? '✓' : '○'} T${i+1}</span>`;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function setMonitorView(view, btn) {
+  state.monitorView = view;
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('monitor-grid-view').style.display = view === 'grid' ? 'block' : 'none';
+  document.getElementById('monitor-table-view').style.display = view === 'table' ? 'block' : 'none';
+  renderMonitor();
+}
+
+function sortMonitor() {
+  const s = document.getElementById('monitor-sort').value;
+  if (s === 'mc-desc') state.tokens.sort((a,b) => b.mc - a.mc);
+  else if (s === 'mc-asc') state.tokens.sort((a,b) => a.mc - b.mc);
+  renderMonitor();
+}
+
+async function forceRefresh() {
+  log('Atualização manual solicitada', 'info');
+  await runMonitorCycle();
+  toast('Monitor atualizado!', 'success');
+}
+
+// =====================================================
+// SALES TABLE
+// =====================================================
+function renderSalesTable() {
+  const tbody = document.getElementById('sales-table');
+  document.getElementById('sales-badge').textContent = state.sales.length + ' vendas';
+  document.getElementById('stat-sells').textContent = state.sales.length;
+  if (!state.sales.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Nenhuma venda executada ainda</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.sales.slice(0, 50).map(s => `
+    <tr>
+      <td style="font-family:var(--mono);font-size:11px">${shortAddr(s.mint)}</td>
+      <td><span class="badge badge-gray">$${fmtNum(s.entryMc || 0)}</span></td>
+      <td><span class="badge badge-blue">$${fmtNum(s.exitMc || 0)}</span></td>
+      <td>${s.pct}%</td>
+      <td><span class="badge badge-green">Alvo ${s.target}</span></td>
+      <td><span class="badge badge-green">✓ OK</span></td>
+      <td style="color:var(--text3)">${s.time}</td>
+    </tr>
+  `).join('');
+}
+
+// =====================================================
+// UTILITIES
+// =====================================================
+function updateStats() {
+  document.getElementById('stat-tokens').textContent = state.tokens.length;
+  document.getElementById('sc-tokens').textContent = state.tokens.length;
+  document.getElementById('monitor-count').textContent = state.tokens.length;
+}
+
+function updateLastChecks() {
+  const el = document.getElementById('last-checks');
+  el.textContent = `Última verificação: ${new Date().toTimeString().slice(0,8)} — ${state.tokens.length} tokens`;
+}
+
+function saveTokens() {
+  try { localStorage.setItem('solhunter_tokens', JSON.stringify(state.tokens.slice(0, 2000))); } catch(e) {}
+}
+
+function shortAddr(addr, len = 8) {
+  if (!addr) return '—';
+  return addr.slice(0, len) + '...' + addr.slice(-4);
+}
+
+function fmtNum(n) {
+  if (!n || isNaN(n)) return '0';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toFixed(0);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// =====================================================
+// INIT
+// =====================================================
+window.addEventListener('load', () => {
+  loadState();
+  renderWallets();
+  renderTargetsHistory();
+  renderSalesTable();
+  updateStats();
+  startCycleTimer();
+  log('SOL Hunter inicializado', 'success');
+  log(`${state.tokens.length} tokens carregados do storage`, 'info');
+});
+</script>
+</body>
+</html>
