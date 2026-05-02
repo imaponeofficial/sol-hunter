@@ -1899,11 +1899,7 @@ function saveSettings() {
   state.config.rpc = document.getElementById('cfg-rpc').value.trim();
   state.config.privkey = document.getElementById('cfg-privkey').value.trim();
 
-  if (!state.config.backendUrl) {
-    toast('Preencha a URL do Railway primeiro', 'error');
-    return;
-  }
-
+  // Salva backendUrl e rpc no localStorage (privkey nunca é salva localmente)
   localStorage.setItem('solhunter_config', JSON.stringify({
     backendUrl: state.config.backendUrl,
     rpc: state.config.rpc
@@ -1911,9 +1907,11 @@ function saveSettings() {
 
   document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Conectando...</span>';
 
+  // Envia RPC e PrivKey para o Railway
   fetch(api('/config'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    mode: 'cors',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify({ rpc: state.config.rpc, privateKey: state.config.privkey })
   })
   .then(r => r.json())
