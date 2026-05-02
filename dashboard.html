@@ -602,6 +602,175 @@
   .color-text3 { color: var(--text3); }
   .color-danger { color: var(--danger); }
   .color-gold { color: var(--accent4); }
+
+  /* =====================================================
+     MOBILE — responsivo para celular
+  ===================================================== */
+  @media (max-width: 768px) {
+
+    /* Esconde sidebar lateral no mobile */
+    .sidebar {
+      display: none;
+    }
+
+    /* Conteúdo ocupa tela toda */
+    .main {
+      margin-left: 0;
+    }
+
+    /* Topbar mobile */
+    .topbar {
+      padding: 0 16px;
+      height: 52px;
+    }
+    .topbar-title { font-size: 13px; }
+    .topbar-right { gap: 8px; }
+    .wallet-badge { font-size: 10px; padding: 5px 8px; }
+    .sol-balance  { font-size: 11px; }
+
+    /* Padding das páginas */
+    .page { padding: 16px 14px 100px; }
+
+    /* Stats em 2 colunas */
+    .stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+    .stat-card  { padding: 14px; }
+    .stat-value { font-size: 22px !important; }
+
+    /* Cards */
+    .card { padding: 16px; border-radius: 10px; }
+
+    /* Grids inline viram coluna única no mobile */
+    div[style*="grid-template-columns:1fr 1fr"],
+    div[style*="grid-template-columns: 1fr 1fr"],
+    div[style*="grid-template-columns:1fr 1fr;"],
+    .form-grid.cols2,
+    .form-grid.cols3,
+    .form-grid.cols4 {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0 !important;
+    }
+    div[style*="grid-template-columns:repeat(3"],
+    div[style*="grid-template-columns: repeat(3"] {
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    /* Botões mais fáceis de tocar */
+    .btn {
+      padding: 12px 18px;
+      font-size: 13px;
+      min-height: 44px;
+      border-radius: 10px;
+    }
+    .btn-sm {
+      padding: 8px 12px;
+      font-size: 12px;
+      min-height: 36px;
+    }
+    .btn-lg {
+      padding: 14px 20px;
+      font-size: 14px;
+      min-height: 50px;
+    }
+
+    /* Inputs maiores no mobile */
+    input, select, textarea {
+      font-size: 16px !important; /* evita zoom automático no iOS */
+      min-height: 44px;
+      padding: 10px 12px !important;
+    }
+
+    /* Form groups */
+    .form-group { margin-bottom: 14px !important; }
+    label { font-size: 12px !important; margin-bottom: 6px !important; }
+
+    /* Tabelas: scroll horizontal */
+    .table-wrap, table {
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+    }
+
+    /* Token grid: 1 coluna */
+    #token-grid {
+      grid-template-columns: 1fr !important;
+    }
+
+    /* Log feed menor */
+    #log-feed { max-height: 180px; font-size: 11px; }
+    #buy-log  { max-height: 140px; font-size: 11px; }
+
+    /* Cycle ring menor */
+    .cycle-widget { transform: scale(0.85); transform-origin: left center; }
+
+    /* Section titles */
+    .section-title { font-size: 13px !important; }
+
+    /* Info box */
+    .info-box { font-size: 12px; padding: 12px; }
+
+    /* Toggle buttons */
+    .toggle-btn { padding: 7px 12px; font-size: 12px; min-height: 36px; }
+
+    /* Esconde colunas menos importantes nas tabelas */
+    .hide-mobile { display: none !important; }
+
+    /* Topbar: esconde o timer de ciclo no mobile pequeno */
+    .cycle-info { display: none; }
+  }
+
+  /* Bottom nav — aparece só no mobile */
+  .bottom-nav {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .bottom-nav {
+      display: flex;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      z-index: 200;
+      height: 62px;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .bnav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      color: var(--text3);
+      font-size: 9px;
+      font-family: var(--mono);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 8px 4px;
+      border: none;
+      background: none;
+      transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    .bnav-item .bnav-icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .bnav-item.active {
+      color: var(--accent);
+    }
+
+    .bnav-item:active {
+      background: rgba(0,255,136,0.06);
+    }
+  }
 </style>
 </head>
 <body>
@@ -655,6 +824,34 @@
       <div class="status-item"><div class="dot" id="rpc-dot" style="background:var(--text3)"></div> <span id="rpc-status">RPC offline</span></div>
     </div>
   </aside>
+
+  <!-- Bottom Navigation (mobile only) -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="bnav-item active" id="bnav-overview" onclick="navigateMobile('overview')">
+      <span class="bnav-icon">◈</span>
+      <span>Geral</span>
+    </button>
+    <button class="bnav-item" id="bnav-monitor" onclick="navigateMobile('monitor')">
+      <span class="bnav-icon">◉</span>
+      <span>Monitor</span>
+    </button>
+    <button class="bnav-item" id="bnav-buy" onclick="navigateMobile('buy')">
+      <span class="bnav-icon">↗</span>
+      <span>Compras</span>
+    </button>
+    <button class="bnav-item" id="bnav-sell" onclick="navigateMobile('sell')">
+      <span class="bnav-icon">↘</span>
+      <span>Vendas</span>
+    </button>
+    <button class="bnav-item" id="bnav-targets" onclick="navigateMobile('targets')">
+      <span class="bnav-icon">◎</span>
+      <span>Alvos</span>
+    </button>
+    <button class="bnav-item" id="bnav-settings" onclick="navigateMobile('settings')">
+      <span class="bnav-icon">◆</span>
+      <span>Config</span>
+    </button>
+  </nav>
 
   <!-- Main -->
   <main class="main">
@@ -1344,12 +1541,25 @@ function navigate(page) {
   document.querySelectorAll('.nav-item').forEach(n => {
     if (n.getAttribute('onclick')?.includes(page)) n.classList.add('active');
   });
+  // Sincroniza bottom nav mobile
+  document.querySelectorAll('.bnav-item').forEach(b => b.classList.remove('active'));
+  const bnav = document.getElementById('bnav-' + page);
+  if (bnav) bnav.classList.add('active');
+
   const [title, sub] = pageTitles[page] || [page, ''];
   document.getElementById('page-title').textContent = title;
   document.getElementById('page-sub').textContent = sub;
 
   if (page === 'monitor') renderMonitor();
   if (page === 'overview') renderSalesTable();
+
+  // Scroll pro topo ao trocar de aba no mobile
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Navegação pelo bottom nav mobile
+function navigateMobile(page) {
+  navigate(page);
 }
 
 // =====================================================
