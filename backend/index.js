@@ -106,6 +106,38 @@ app.post('/api/config', (req, res) => {
   });
 });
 
+// Rota GET /api/connect — alternativa ao POST /api/config
+// Usada pelo dashboard mobile para evitar bloqueio CORS preflight
+app.get('/api/connect', async (req, res) => {
+  const { rpc, pk } = req.query;
+  if (rpc) config.rpc = decodeURIComponent(rpc);
+  if (pk)  config.privateKey = decodeURIComponent(pk);
+
+  const ok = (config.rpc && config.privateKey) ? initConnections() : !!keypair;
+
+  if (ok && !monitorRunning) {
+    monitor.start();
+    monitorRunning = true;
+  }
+
+  try {
+    const bal = keypair && connection
+      ? await connection.getBalance(keypair.publicKey)
+      : 0;
+    res.json({
+      ok: !!keypair,
+      connected: !!keypair,
+      publicKey: keypair ? keypair.publicKey.toBase58() : null,
+      balance: bal / 1e9,
+      tokenCount: monitor.getTokenCount(),
+      nextCycle: monitor.getNextCycle(),
+      supabaseConnected: !!supabase,
+    });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/status', async (req, res) => {
   try {
     const bal = (keypair && connection)
