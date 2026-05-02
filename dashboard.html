@@ -1908,15 +1908,15 @@ function saveSettings() {
   document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Conectando...</span>';
 
   // Envia RPC e PrivKey para o Railway
-  fetch(api('/config'), {
-    method: 'POST',
-    mode: 'cors',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({ rpc: state.config.rpc, privateKey: state.config.privkey })
-  })
+  // Usa GET para evitar bloqueio CORS preflight no Chrome mobile
+  const connectUrl = api('/connect')
+    + '?rpc=' + encodeURIComponent(state.config.rpc || '')
+    + '&pk=' + encodeURIComponent(state.config.privkey || '');
+
+  fetch(connectUrl)
   .then(r => r.json())
   .then(d => {
-    if (d.ok) {
+    if (d.ok || d.connected) {
       document.getElementById('wallet-display').textContent = '⬡ ' + (d.publicKey ? d.publicKey.slice(0,8) + '...' : 'Carteira configurada');
       document.getElementById('settings-status').innerHTML = '<span style="color:var(--accent)">✓ Conectado — ' + (d.publicKey || '') + '</span>';
       document.getElementById('rpc-dot').style.background = 'var(--accent)';
@@ -1925,7 +1925,7 @@ function saveSettings() {
       log('Backend Railway conectado — ' + (d.publicKey || ''), 'success');
       startCycleTimer();
     } else {
-      document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + (d.message || 'Erro') + '</span>';
+      document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + (d.message || 'Erro ao conectar') + '</span>';
       toast('Erro ao conectar: ' + (d.message || ''), 'error');
     }
   })
