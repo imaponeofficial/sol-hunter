@@ -1642,16 +1642,19 @@ async function runMonitorCycle() {
   for (let i = 0; i < mints.length; i += BATCH) {
     const batch = mints.slice(i, i + BATCH);
     try {
-      const url = `https://price.jup.ag/v6/price?ids=${batch.join(',')}`;
+      // Jupiter Price API v2 (substitui v6 descontinuada)
+      const url = `https://api.jup.ag/price/v2?ids=${batch.join(',')}`;
       const res = await fetch(url);
       const data = await res.json();
 
       for (const [mint, priceData] of Object.entries(data.data || {})) {
         const token = state.tokens.find(t => t.mint === mint);
         if (!token) continue;
-        const mc = priceData.price * (token.supply || 1e9);
+        // v2 retorna price como string — converter para number
+        const price = parseFloat(priceData.price) || 0;
+        const mc = price * (token.supply || 1_000_000_000);
         token.mc = mc;
-        token.price = priceData.price;
+        token.price = price;
         checkTargets(token);
       }
     } catch(e) {
@@ -1743,7 +1746,8 @@ async function previewBuy() {
   log(`Buscando tokens da carteira: ${shortAddr(wallet)}`, 'info');
 
   try {
-    // Busca tokens diretamente via RPC Solana público (sem precisar do Railway)
+    // Passo 1: busca tokens da carteira via Helius (melhor que RPC público)
+    // Usa getTokenAccountsByOwner com RPC público — sem autenticação
     const rpcUrl = 'https://api.mainnet-beta.solana.com';
     const rpcRes = await fetch(rpcUrl, {
       method: 'POST',
@@ -1751,41 +1755,83 @@ async function previewBuy() {
       body: JSON.stringify({
         jsonrpc: '2.0', id: 1,
         method: 'getParsedTokenAccountsByOwner',
-        params: [wallet, { programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }, { encoding: 'jsonParsed' }]
+        params: [wallet,
+          { programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' },
+          { encoding: 'jsonParsed', commitment: 'confirmed' }
+        ]
       })
     });
-    const rpcData = await rpcRes.json();
-    const accounts = rpcData.result?.value || [];
-    const mints = accounts
-      .filter(a => parseInt(a.account.data.parsed.info.tokenAmount.amount) > 0)
-      .map(a => a.account.data.parsed.info.mint)
-      .slice(0, qty);
 
-    if (!mints.length) { toast('Nenhum token encontrado nessa carteira', 'warn'); state.previewTokens = []; }
-    else {
-      // Busca preços via Jupiter (chamada direta — sem precisar do Railway)
+    if (!rpcRes.ok) throw new Error('RPC HTTP ' + rpcRes.status);
+    const rpcData = await rpcRes.json();
+
+    if (rpcData.error) throw new Error('RPC: ' + rpcData.error.message);
+
+    const accounts = rpcData.result?.value || [];
+    log(`Carteira tem ${accounts.length} contas de token`, 'info');
+
+    const mints = accounts
+      .filter(a => {
+        const amt = a.account?.data?.parsed?.info?.tokenAmount?.uiAmount;
+        return amt && amt > 0;
+      })
+      .map(a => a.account.data.parsed.info.mint);
+
+    log(`${mints.length} tokens com saldo > 0`, 'info');
+
+    if (!mints.length) {
+      toast('Nenhum token com saldo encontrado nessa carteira', 'warn');
+      state.previewTokens = [];
+    } else {
+      // Passo 2: busca preços e MC via Jupiter Price API v2
       const withMC = [];
       for (let i = 0; i < mints.length; i += 100) {
         const batch = mints.slice(i, i + 100);
         try {
-          const pr = await fetch('https://price.jup.ag/v6/price?ids=' + batch.join(','));
+          // Jupiter v2 — nova API (v6 foi descontinuada)
+          const pr = await fetch('https://api.jup.ag/price/v2?ids=' + batch.join(',') + '&showExtraInfo=false');
+          if (!pr.ok) throw new Error('Jupiter HTTP ' + pr.status);
           const pd = await pr.json();
+
           for (const mint of batch) {
             const d = pd.data?.[mint];
-            if (!d) continue;
-            const mc = d.price * 1_000_000_000;
+            if (!d || !d.price) continue;
+
+            const price = parseFloat(d.price);
+            if (!price || price <= 0) continue;
+
+            // MC = price * supply (tokens pump.fun têm 1B supply por padrão)
+            // Mas alguns têm supply diferente — usar 1B como estimativa padrão
+            const supply = 1_000_000_000;
+            const mc = price * supply;
+
             if (mc >= mcMin && mc <= mcMax) {
-              withMC.push({ mint, price: d.price, mc, liquidity: d.liquidity || 0 });
+              withMC.push({
+                mint,
+                price,
+                mc,
+                supply,
+                liquidity: 0,
+                alreadyOwned: state.tokens.some(t => t.mint === mint)
+              });
             }
           }
-        } catch(_) {}
+        } catch(batchErr) {
+          log('Erro no lote de preços: ' + batchErr.message, 'warn');
+        }
       }
+
       state.previewTokens = withMC;
-      if (!withMC.length) toast('Nenhum token no range de MC $' + mcMin + '–$' + mcMax, 'warn');
+      log(`${withMC.length} tokens no range MC $${mcMin}–$${mcMax}`, withMC.length ? 'success' : 'warn');
+
+      if (!withMC.length) {
+        // Mostra quantos tokens foram encontrados mas fora do range
+        toast(`${mints.length} tokens encontrados, nenhum no range MC $${mcMin.toLocaleString()}–$${mcMax.toLocaleString()}. Tente ampliar o range.`, 'warn');
+      }
     }
   } catch(e) {
     log('Erro ao buscar tokens: ' + e.message, 'error');
-    toast('Erro ao buscar tokens: ' + e.message, 'error');
+    toast('Erro: ' + e.message, 'error');
     state.previewTokens = [];
   }
 
