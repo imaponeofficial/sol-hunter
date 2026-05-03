@@ -20,11 +20,15 @@ async function buyToken({ mint, amountSol, slippage = 15, priority = 'medium' })
   const lamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
 
   // 1. Get quote
-  const quoteUrl = `${JUPITER_QUOTE_URL}?inputMint=${SOL_MINT}&outputMint=${mint}&amount=${lamports}&slippageBps=${slippage * 100}`;
-  const quoteRes = await fetch(quoteUrl);
-  if (!quoteRes.ok) throw new Error(`Quote falhou: ${quoteRes.status}`);
+  const quoteUrl = `${JUPITER_QUOTE_URL}?inputMint=${SOL_MINT}&outputMint=${mint}&amount=${lamports}&slippageBps=${slippage * 100}&onlyDirectRoutes=false`;
+  const quoteRes = await fetch(quoteUrl, { timeout: 10000 });
+  if (!quoteRes.ok) {
+    const errText = await quoteRes.text().catch(() => quoteRes.status);
+    throw new Error(`Quote falhou: ${quoteRes.status} — ${errText.slice(0, 120)}`);
+  }
   const quote = await quoteRes.json();
-  if (quote.error) throw new Error(`Quote erro: ${quote.error}`);
+  if (quote.error) throw new Error(`Sem rota de swap para este token: ${quote.error}`);
+  if (!quote.outAmount || quote.outAmount === '0') throw new Error('Sem liquidez disponível para este token');
 
   // 2. Get swap transaction
   const swapRes = await fetch(JUPITER_SWAP_URL, {

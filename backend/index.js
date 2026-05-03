@@ -338,15 +338,36 @@ async function handleTargetHit(token, targetIndex, target) {
 // COMMAND LOOP — lê comandos do Supabase e executa
 // Dashboard envia buy/sell via Supabase; Railway processa aqui
 // =====================================================
+// =====================================================
+// ROUTES — Emergência: cancela comandos em loop
+// =====================================================
+app.post('/api/commands/cancel-all', async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Supabase não configurado' });
+  try {
+    await supabase.from('sol_hunter_commands').update({ status: 'cancelled', result: 'Cancelado manualmente' }).eq('status', 'pending');
+    await supabase.from('sol_hunter_commands').update({ status: 'cancelled', result: 'Cancelado manualmente' }).eq('status', 'processing');
+    console.log('[Emergency] Todos os comandos pending/processing cancelados');
+    res.json({ ok: true, message: 'Comandos cancelados com sucesso' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 async function processCommands() {
   if (!supabase || !keypair) return;
   try {
+    // Recupera comandos presos em 'processing' há mais de 3 minutos (crash/restart recovery)
+    const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    await supabase
+      .from('sol_hunter_commands')
+      .update({ status: 'error', result: 'Timeout — processo reiniciado' })
+      .eq('status', 'processing')
+      .lt('created_at', threeMinAgo);
+
     const { data: cmds, error } = await supabase
       .from('sol_hunter_commands')
       .select('*')
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
-      .limit(10);
+      .limit(5);
 
     if (error || !cmds || !cmds.length) return;
 
@@ -369,12 +390,6 @@ async function processCommands() {
             slippage: parseInt(payload.slippage) || config.slippage,
             priority: payload.priority || 'medium'
           });
-
-          // Só salva se a compra foi realmente confirmada on-chain (tem txid)
-          if (!result || !result.txid) {
-            throw new Error('Compra não confirmada — txid ausente na resposta');
-          }
-
           await db.saveToken({ mint: payload.mint, bought_at: new Date().toISOString(), entry_sol: payload.amountSol, status: 'active' });
           monitor.addToken(payload.mint);
           await supabase.from('sol_hunter_commands').update({ status: 'done', result: JSON.stringify(result) }).eq('id', cmd.id);
