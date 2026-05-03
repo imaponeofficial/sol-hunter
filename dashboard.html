@@ -1795,50 +1795,91 @@ async function previewBuy() {
       toast('Nenhum token com saldo encontrado nessa carteira', 'warn');
       state.previewTokens = [];
     } else {
-      // Passo 2: busca preços e MC via Jupiter Price API v2
+      // Passo 2: busca preços e MC via DexScreener (cobertura muito maior para memecoins)
+      // com fallback para Jupiter Price API v2
       const withMC = [];
-      for (let i = 0; i < mints.length; i += 100) {
-        const batch = mints.slice(i, i + 100);
+      const priceMap = {}; // mint -> { price, mc, liquidity }
+
+      // --- DexScreener: aceita até 30 tokens por requisição ---
+      log('Buscando preços via DexScreener...', 'info');
+      for (let i = 0; i < mints.length; i += 30) {
+        const batch = mints.slice(i, i + 30);
         try {
-          // Jupiter v2 — nova API (v6 foi descontinuada)
-          const pr = await fetch('https://api.jup.ag/price/v2?ids=' + batch.join(',') + '&showExtraInfo=false');
-          if (!pr.ok) throw new Error('Jupiter HTTP ' + pr.status);
+          const pr = await fetch('https://api.dexscreener.com/tokens/v1/solana/' + batch.join(','));
+          if (!pr.ok) throw new Error('DexScreener HTTP ' + pr.status);
           const pd = await pr.json();
 
-          for (const mint of batch) {
-            const d = pd.data?.[mint];
-            if (!d || !d.price) continue;
-
-            const price = parseFloat(d.price);
+          // DexScreener retorna array de pares — pegar o par com maior liquidez por token
+          const pairs = Array.isArray(pd) ? pd : (pd.pairs || []);
+          for (const pair of pairs) {
+            const mint = pair.baseToken?.address;
+            if (!mint || !batch.includes(mint)) continue;
+            const price = parseFloat(pair.priceUsd || 0);
             if (!price || price <= 0) continue;
-
-            // MC = price * supply (tokens pump.fun têm 1B supply por padrão)
-            // Mas alguns têm supply diferente — usar 1B como estimativa padrão
-            const supply = 1_000_000_000;
-            const mc = price * supply;
-
-            if (mc >= mcMin && mc <= mcMax) {
-              withMC.push({
-                mint,
-                price,
-                mc,
-                supply,
-                liquidity: 0,
-                alreadyOwned: state.tokens.some(t => t.mint === mint)
-              });
+            // Preferir par com maior liquidez se já temos esse mint
+            const liq = parseFloat(pair.liquidity?.usd || 0);
+            if (!priceMap[mint] || liq > (priceMap[mint].liquidity || 0)) {
+              // MC real do DexScreener se disponível, senão estimado
+              const mcRaw = parseFloat(pair.marketCap || pair.fdv || 0);
+              const mc = mcRaw > 0 ? mcRaw : price * 1_000_000_000;
+              priceMap[mint] = { price, mc, liquidity: liq };
             }
           }
         } catch(batchErr) {
-          log('Erro no lote de preços: ' + batchErr.message, 'warn');
+          log('Erro DexScreener lote ' + (i/30+1) + ': ' + batchErr.message, 'warn');
+        }
+        // Pequena pausa para não sobrecarregar a API
+        if (i + 30 < mints.length) await new Promise(r => setTimeout(r, 200));
+      }
+
+      // --- Fallback Jupiter v2 para mints sem preço no DexScreener ---
+      const missingMints = mints.filter(m => !priceMap[m]);
+      if (missingMints.length > 0) {
+        log(`Jupiter fallback para ${missingMints.length} tokens sem preço no DexScreener...`, 'info');
+        for (let i = 0; i < missingMints.length; i += 100) {
+          const batch = missingMints.slice(i, i + 100);
+          try {
+            const pr = await fetch('https://api.jup.ag/price/v2?ids=' + batch.join(',') + '&showExtraInfo=false');
+            if (!pr.ok) throw new Error('Jupiter HTTP ' + pr.status);
+            const pd = await pr.json();
+            for (const mint of batch) {
+              const d = pd.data?.[mint];
+              if (!d || !d.price) continue;
+              const price = parseFloat(d.price);
+              if (!price || price <= 0) continue;
+              priceMap[mint] = { price, mc: price * 1_000_000_000, liquidity: 0 };
+            }
+          } catch(batchErr) {
+            log('Erro Jupiter fallback: ' + batchErr.message, 'warn');
+          }
+        }
+      }
+
+      // --- Aplicar filtro de MC ---
+      let foundCount = 0;
+      for (const mint of mints) {
+        const p = priceMap[mint];
+        if (!p) continue;
+        foundCount++;
+        if (p.mc >= mcMin && p.mc <= mcMax) {
+          withMC.push({
+            mint,
+            price: p.price,
+            mc: p.mc,
+            supply: 1_000_000_000,
+            liquidity: p.liquidity,
+            alreadyOwned: state.tokens.some(t => t.mint === mint)
+          });
         }
       }
 
       state.previewTokens = withMC;
-      log(`${withMC.length} tokens no range MC $${mcMin}–$${mcMax}`, withMC.length ? 'success' : 'warn');
+      log(`Preços obtidos: ${foundCount}/${mints.length} tokens. ${withMC.length} no range MC $${mcMin.toLocaleString()}–$${mcMax.toLocaleString()}`, withMC.length ? 'success' : 'warn');
 
-      if (!withMC.length) {
-        // Mostra quantos tokens foram encontrados mas fora do range
-        toast(`${mints.length} tokens encontrados, nenhum no range MC $${mcMin.toLocaleString()}–$${mcMax.toLocaleString()}. Tente ampliar o range.`, 'warn');
+      if (!withMC.length && foundCount === 0) {
+        toast(`${mints.length} tokens encontrados mas nenhum com preço disponível. Tokens podem ter liquidez muito baixa.`, 'warn');
+      } else if (!withMC.length) {
+        toast(`${foundCount} tokens com preço encontrados, nenhum no range MC $${mcMin.toLocaleString()}–$${mcMax.toLocaleString()}. Tente ampliar o range.`, 'warn');
       }
     }
   } catch(e) {
