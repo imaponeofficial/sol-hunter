@@ -369,6 +369,12 @@ async function processCommands() {
             slippage: parseInt(payload.slippage) || config.slippage,
             priority: payload.priority || 'medium'
           });
+
+          // Só salva se a compra foi realmente confirmada on-chain (tem txid)
+          if (!result || !result.txid) {
+            throw new Error('Compra não confirmada — txid ausente na resposta');
+          }
+
           await db.saveToken({ mint: payload.mint, bought_at: new Date().toISOString(), entry_sol: payload.amountSol, status: 'active' });
           monitor.addToken(payload.mint);
           await supabase.from('sol_hunter_commands').update({ status: 'done', result: JSON.stringify(result) }).eq('id', cmd.id);
