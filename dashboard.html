@@ -1760,12 +1760,13 @@ async function previewBuy() {
     // Passo 1: busca tokens da carteira via RPC configurado nas settings
     // Prioriza RPC salvo pelo usuário; fallback para público se não configurado
     const rpcUrl = state.config.rpc || localStorage.getItem('sh_rpc_url') || 'https://api.mainnet-beta.solana.com';
+    // Usa getTokenAccountsByOwner (base64) — compatível com plano gratuito QuickNode e Helius
     const rpcRes = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jsonrpc: '2.0', id: 1,
-        method: 'getParsedTokenAccountsByOwner',
+        method: 'getTokenAccountsByOwner',
         params: [wallet,
           { programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' },
           { encoding: 'jsonParsed', commitment: 'confirmed' }
@@ -1783,8 +1784,8 @@ async function previewBuy() {
 
     const mints = accounts
       .filter(a => {
-        const amt = a.account?.data?.parsed?.info?.tokenAmount?.uiAmount;
-        return amt && amt > 0;
+        const info = a.account?.data?.parsed?.info;
+        return info && parseInt(info.tokenAmount?.amount) > 0;
       })
       .map(a => a.account.data.parsed.info.mint);
 
