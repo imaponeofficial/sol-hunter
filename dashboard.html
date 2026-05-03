@@ -1509,7 +1509,13 @@ function loadState() {
     if (state.config.supaUrl) { const el = document.getElementById('cfg-supa-url'); if(el) el.value = state.config.supaUrl; }
     if (state.config.supaKey) { const el = document.getElementById('cfg-supa-key'); if(el) el.value = state.config.supaKey; }
     if (state.config.backendUrl) document.getElementById('cfg-backend-url').value = state.config.backendUrl;
-    if (state.config.rpc) document.getElementById('cfg-rpc').value = state.config.rpc;
+    // Restaura RPC salvo
+    const savedRpc = localStorage.getItem('sh_rpc_url') || state.config.rpc || '';
+    if (savedRpc) {
+      state.config.rpc = savedRpc;
+      const rpcEl = document.getElementById('cfg-rpc');
+      if (rpcEl) rpcEl.value = savedRpc;
+    }
     if (state.config.interval) document.getElementById('cfg-interval').value = state.config.interval;
     if (state.config.slippage) document.getElementById('cfg-default-slippage').value = state.config.slippage;
 
@@ -1746,9 +1752,9 @@ async function previewBuy() {
   log(`Buscando tokens da carteira: ${shortAddr(wallet)}`, 'info');
 
   try {
-    // Passo 1: busca tokens da carteira via Helius (melhor que RPC público)
-    // Usa getTokenAccountsByOwner com RPC público — sem autenticação
-    const rpcUrl = 'https://api.mainnet-beta.solana.com';
+    // Passo 1: busca tokens da carteira via RPC configurado nas settings
+    // Prioriza RPC salvo pelo usuário; fallback para público se não configurado
+    const rpcUrl = state.config.rpc || localStorage.getItem('sh_rpc_url') || 'https://api.mainnet-beta.solana.com';
     const rpcRes = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2093,12 +2099,17 @@ async function saveSettings() {
     return;
   }
 
-  // Salva credenciais Supabase localmente
+  // Salva credenciais Supabase + RPC localmente
   state.config.supaUrl = supaUrl;
   state.config.supaKey = supaKey;
+  const rpcInput = (document.getElementById('cfg-rpc').value || '').trim();
+  if (rpcInput) {
+    state.config.rpc = rpcInput;
+    localStorage.setItem('sh_rpc_url', rpcInput);
+  }
   localStorage.setItem('sh_supa_url', supaUrl);
   localStorage.setItem('sh_supa_key', supaKey);
-  localStorage.setItem('solhunter_config', JSON.stringify({ backendUrl: state.config.backendUrl }));
+  localStorage.setItem('solhunter_config', JSON.stringify({ backendUrl: state.config.backendUrl, rpc: state.config.rpc }));
 
   // Reseta cliente para forçar reconexão
   _supa = null;
