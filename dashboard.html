@@ -1296,6 +1296,11 @@
             <input type="password" id="cfg-supa-key" placeholder="eyJ...">
             <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">Chave pública anon — salva localmente</span>
           </div>
+          <div class="form-group mb16">
+            <label>RPC URL (Helius / QuickNode)</label>
+            <input type="text" id="cfg-rpc" placeholder="https://mainnet.helius-rpc.com/?api-key=SUA_KEY">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">Usado na aba Compras para buscar tokens da carteira fonte</span>
+          </div>
           <div class="form-group mb20">
             <label>URL do Backend (Railway) — para comandos</label>
             <input type="text" id="cfg-backend-url" placeholder="https://sol-hunter-production.up.railway.app">
@@ -2139,6 +2144,15 @@ async function saveSettings() {
       }
     }
 
+    // Salva RPC no Supabase para persistir entre dispositivos
+    if (rpcInput) {
+      try {
+        const cfgTbl = await db.from('sol_hunter_config');
+        await cfgTbl.upsert({ id: 1, rpc_url: rpcInput, updated_at: new Date().toISOString() });
+        log('RPC salvo no Supabase', 'success');
+      } catch(e) { log('Aviso: não salvou RPC no banco — ' + e.message, 'warn'); }
+    }
+
     toast('Supabase conectado!', 'success');
     log('Supabase conectado — lendo dados em tempo real', 'success');
     startCycleTimer();
@@ -2157,10 +2171,21 @@ async function loadTokensFromSupabase() {
   const db = getSupabase();
   if (!db) return;
   try {
+    // Carrega config salva (RPC etc)
+    const cfgTbl = await db.from('sol_hunter_config');
+    const cfgRows = await cfgTbl.select('*', { limit: 1 });
+    if (cfgRows && cfgRows.length && cfgRows[0].rpc_url) {
+      state.config.rpc = cfgRows[0].rpc_url;
+      localStorage.setItem('sh_rpc_url', cfgRows[0].rpc_url);
+      const rpcEl = document.getElementById('cfg-rpc');
+      if (rpcEl) rpcEl.value = cfgRows[0].rpc_url;
+      log('RPC carregado do Supabase', 'success');
+    }
+  } catch(e) { /* tabela pode não existir ainda */ }
+  try {
     const tbl = await db.from('sol_hunter_tokens');
     const rows = await tbl.select('*', { filter: 'status=eq.active' });
     if (rows && rows.length) {
-      // Mescla com tokens já no estado (não duplica)
       const existingMints = new Set(state.tokens.map(t => t.mint));
       for (const r of rows) {
         if (!existingMints.has(r.mint)) {
@@ -2172,7 +2197,6 @@ async function loadTokensFromSupabase() {
       updateStats();
       log('Tokens carregados do Supabase: ' + rows.length, 'success');
     }
-    // Carrega vendas
     const stbl = await db.from('sol_hunter_sales');
     const sales = await stbl.select('*', { order: 'sold_at.desc', limit: '100' });
     if (sales && sales.length) {
