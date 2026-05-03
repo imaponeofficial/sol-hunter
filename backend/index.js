@@ -138,11 +138,6 @@ app.get('/api/connect', async (req, res) => {
   }
 });
 
-// Rota ping — acorda o Railway e confirma que está online
-app.get('/api/ping', (req, res) => {
-  res.json({ ok: true, ts: Date.now() });
-});
-
 app.get('/api/status', async (req, res) => {
   try {
     const bal = (keypair && connection)
@@ -340,6 +335,83 @@ async function handleTargetHit(token, targetIndex, target) {
 }
 
 // =====================================================
+// COMMAND LOOP — lê comandos do Supabase e executa
+// Dashboard envia buy/sell via Supabase; Railway processa aqui
+// =====================================================
+async function processCommands() {
+  if (!supabase || !keypair) return;
+  try {
+    const { data: cmds, error } = await supabase
+      .from('sol_hunter_commands')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    if (error || !cmds || !cmds.length) return;
+
+    for (const cmd of cmds) {
+      // Marca como processando imediatamente
+      await supabase.from('sol_hunter_commands').update({ status: 'processing' }).eq('id', cmd.id);
+
+      try {
+        const payload = typeof cmd.payload === 'string' ? JSON.parse(cmd.payload) : cmd.payload;
+
+        if (cmd.action === 'buy') {
+          const owns = await wallet.ownsToken(payload.mint);
+          if (owns) {
+            await supabase.from('sol_hunter_commands').update({ status: 'skipped', result: 'Já possui este token' }).eq('id', cmd.id);
+            continue;
+          }
+          const result = await buyer.buyToken({
+            mint: payload.mint,
+            amountSol: parseFloat(payload.amountSol),
+            slippage: parseInt(payload.slippage) || config.slippage,
+            priority: payload.priority || 'medium'
+          });
+          await db.saveToken({ mint: payload.mint, bought_at: new Date().toISOString(), entry_sol: payload.amountSol, status: 'active' });
+          monitor.addToken(payload.mint);
+          await supabase.from('sol_hunter_commands').update({ status: 'done', result: JSON.stringify(result) }).eq('id', cmd.id);
+          console.log('[CMD] Buy executado:', payload.mint.slice(0,8));
+
+        } else if (cmd.action === 'sell') {
+          const result = await seller.sellToken({
+            mint: payload.mint,
+            pct: parseInt(payload.pct) || 100,
+            slippage: parseInt(payload.slippage) || config.slippage
+          });
+          await db.recordSale({ mint: payload.mint, pct: payload.pct, sol_received: result.solReceived, txid: result.txid, sold_at: new Date().toISOString(), trigger: 'dashboard' });
+          await supabase.from('sol_hunter_commands').update({ status: 'done', result: JSON.stringify(result) }).eq('id', cmd.id);
+          console.log('[CMD] Sell executado:', payload.mint.slice(0,8));
+        }
+
+      } catch(e) {
+        console.error('[CMD] Erro ao processar comando', cmd.action, ':', e.message);
+        await supabase.from('sol_hunter_commands').update({ status: 'error', result: e.message }).eq('id', cmd.id);
+      }
+    }
+  } catch(e) {
+    // silencia erros de polling para não derrubar o processo
+  }
+}
+
+// Publica status da carteira no Supabase para o dashboard ler
+async function publishStatus() {
+  if (!supabase || !keypair || !connection) return;
+  try {
+    const bal = await connection.getBalance(keypair.publicKey);
+    await supabase.from('sol_hunter_status').upsert({
+      id: 1,
+      public_key: keypair.publicKey.toBase58(),
+      balance_sol: bal / 1e9,
+      token_count: monitor.getTokenCount(),
+      next_cycle: monitor.getNextCycle(),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+  } catch(e) { /* silencia */ }
+}
+
+// =====================================================
 // START
 // =====================================================
 const PORT = process.env.PORT || 3000;
@@ -350,10 +422,16 @@ app.listen(PORT, () => {
       monitor.start();
       monitorRunning = true;
       console.log('✅ Conexão e monitor iniciados via .env\n');
+      // Publica status a cada 30s
+      setInterval(publishStatus, 30000);
+      publishStatus();
     }
   } else {
-    console.log('⚠️  Configure RPC e chave privada via dashboard (aba Configurações)\n');
+    console.log('⚠️  Configure RPC e chave privada via variáveis de ambiente no Railway\n');
   }
+  // Processa comandos do Supabase a cada 3s
+  setInterval(processCommands, 3000);
+  console.log('🔄 Aguardando comandos via Supabase...\n');
 });
 
 module.exports = app;
