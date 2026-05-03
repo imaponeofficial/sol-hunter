@@ -138,6 +138,11 @@ app.get('/api/connect', async (req, res) => {
   }
 });
 
+// Rota ping — acorda o Railway e confirma que está online
+app.get('/api/ping', (req, res) => {
+  res.json({ ok: true, ts: Date.now() });
+});
+
 app.get('/api/status', async (req, res) => {
   try {
     const bal = (keypair && connection)
