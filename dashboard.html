@@ -1640,16 +1640,22 @@ async function previewBuy() {
   log(`Buscando tokens da carteira: ${shortAddr(wallet)}`, 'info');
 
   try {
-    const res = await fetch(api(`/wallet-tokens?address=${wallet}&mcMin=${mcMin}&mcMax=${mcMax}&limit=${qty}`));
-    if (!res.ok) throw new Error('Backend não disponível');
+    const ctl2 = new AbortController();
+    const t2 = setTimeout(() => ctl2.abort(), 30000);
+    const res = await fetch(api(`/wallet-tokens?address=${wallet}&mcMin=${mcMin}&mcMax=${mcMax}&limit=${qty}`), { signal: ctl2.signal });
+    clearTimeout(t2);
+    if (!res.ok) throw new Error('Backend retornou erro ' + res.status);
     const data = await res.json();
     state.previewTokens = data.tokens || [];
     if (state.previewTokens.length === 0) {
       toast('Nenhum token encontrado nessa carteira no range de MC definido', 'warn');
     }
   } catch(e) {
-    log('Erro ao buscar tokens: ' + e.message, 'error');
-    toast('Erro ao buscar tokens — verifique a conexão com o Railway', 'error');
+    const msg = e.name === 'AbortError'
+      ? 'Timeout — Railway demorou demais. Conecte primeiro nas Configurações.'
+      : 'Erro ao buscar tokens — conecte a carteira nas Configurações primeiro';
+    log(msg, 'error');
+    toast(msg, 'error');
     state.previewTokens = [];
   }
 
@@ -1913,27 +1919,48 @@ function saveSettings() {
     + '?rpc=' + encodeURIComponent(state.config.rpc || '')
     + '&pk=' + encodeURIComponent(state.config.privkey || '');
 
-  fetch(connectUrl)
-  .then(r => r.json())
-  .then(d => {
-    if (d.ok || d.connected) {
-      document.getElementById('wallet-display').textContent = '⬡ ' + (d.publicKey ? d.publicKey.slice(0,8) + '...' : 'Carteira configurada');
-      document.getElementById('settings-status').innerHTML = '<span style="color:var(--accent)">✓ Conectado — ' + (d.publicKey || '') + '</span>';
-      document.getElementById('rpc-dot').style.background = 'var(--accent)';
-      document.getElementById('rpc-status').textContent = 'Railway conectado';
-      toast('Conectado com sucesso!', 'success');
-      log('Backend Railway conectado — ' + (d.publicKey || ''), 'success');
-      startCycleTimer();
-    } else {
-      document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + (d.message || 'Erro ao conectar') + '</span>';
-      toast('Erro ao conectar: ' + (d.message || ''), 'error');
-    }
-  })
-  .catch(e => {
-    document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ Sem resposta do Railway — verifique a URL</span>';
-    toast('Railway offline ou URL incorreta', 'error');
-    log('Erro ao conectar ao Railway: ' + e.message, 'error');
-  });
+  // Helper: fetch com timeout configurável
+  function fetchWithTimeout(url, ms) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  }
+
+  // Acorda o Railway antes (ping), depois conecta com timeout generoso
+  document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Acordando servidor...</span>';
+
+  fetchWithTimeout(api('/ping'), 15000)
+    .catch(() => {}) // ignora erro do ping — tenta conectar mesmo assim
+    .finally(() => {
+      document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Conectando...</span>';
+      fetchWithTimeout(connectUrl, 30000)
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(d => {
+          if (d.ok || d.connected) {
+            document.getElementById('wallet-display').textContent = '⬡ ' + (d.publicKey ? d.publicKey.slice(0,8) + '...' : 'Carteira configurada');
+            document.getElementById('settings-status').innerHTML = '<span style="color:var(--accent)">✓ Conectado — ' + (d.publicKey || '') + '</span>';
+            document.getElementById('rpc-dot').style.background = 'var(--accent)';
+            document.getElementById('rpc-status').textContent = 'Railway conectado';
+            toast('Conectado com sucesso!', 'success');
+            log('Backend Railway conectado — ' + (d.publicKey || ''), 'success');
+            startCycleTimer();
+          } else {
+            document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + (d.message || 'Erro ao conectar') + '</span>';
+            toast('Erro ao conectar: ' + (d.message || ''), 'error');
+          }
+        })
+        .catch(e => {
+          const msg = e.name === 'AbortError'
+            ? 'Timeout — Railway demorou demais. Tente novamente.'
+            : 'Sem resposta do Railway — verifique a URL';
+          document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + msg + '</span>';
+          toast(msg, 'error');
+          log('Erro ao conectar ao Railway: ' + e.message, 'error');
+        });
+    });
 }
 
 function saveGlobalParams() {
