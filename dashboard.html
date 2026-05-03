@@ -873,6 +873,7 @@
             <button class="toggle-btn" onclick="setMonitorView('table',this)">Tabela</button>
           </div>
           <button class="btn btn-primary btn-sm" onclick="forceRefresh()">↺ Atualizar Agora</button>
+          <button class="btn btn-sm" style="background:var(--surface3);color:var(--danger);border:1px solid var(--danger)" onclick="clearMonitor()">🗑 Limpar Monitor</button>
         </div>
       </div>
 
@@ -1963,16 +1964,19 @@ async function executeBuy() {
           const db = getSupabase();
           if (!db) throw new Error('Supabase não configurado');
           const tbl = await db.from('sol_hunter_commands');
-          await tbl.insert({
+          const { error: insertErr } = await tbl.insert({
             action: 'buy',
             payload: JSON.stringify({ mint, amountSol, slippage, priority }),
             status: 'pending',
             created_at: new Date().toISOString()
           });
-          addBuyLog(`⟳ ${shortAddr(mint)} — comando enviado ao Railway`, 'warn');
+          if (insertErr) throw new Error('Supabase: ' + insertErr.message);
+          // Só adiciona ao monitor local depois que o comando foi enfileirado com sucesso
+          addBuyLog(`⟳ ${shortAddr(mint)} — aguardando Railway executar...`, 'warn');
           addTokenToMonitor(mint);
         } catch(e) {
-          addBuyLog(`✗ ${shortAddr(mint)} — ${e.message}`, 'error');
+          addBuyLog(`✗ ${shortAddr(mint)} — FALHA: ${e.message}`, 'error');
+          // NÃO adiciona ao monitor — compra não foi confirmada
         }
       } else {
         await sleep(80);
@@ -1980,9 +1984,8 @@ async function executeBuy() {
         addTokenToMonitor(mint);
       }
     } catch(e) {
-      await sleep(80);
-      addBuyLog(`[SIM] ${shortAddr(mint)} — sem backend`, 'warn');
-      addTokenToMonitor(mint);
+      addBuyLog(`✗ ${shortAddr(mint)} — erro inesperado: ${e.message}`, 'error');
+      // NÃO adiciona ao monitor em nenhum caso de erro
     }
   }
 
@@ -2356,6 +2359,19 @@ function updateLastChecks() {
 
 function saveTokens() {
   try { localStorage.setItem('solhunter_tokens', JSON.stringify(state.tokens.slice(0, 2000))); } catch(e) {}
+}
+
+// Limpa todos os tokens fantasmas do monitor (compras que falharam mas foram registradas)
+function clearMonitor() {
+  if (!confirm(`Remover TODOS os ${state.tokens.length} tokens do monitor?\n\nUse isso para limpar tokens fantasmas (compras que falharam).`)) return;
+  state.tokens = [];
+  saveTokens();
+  updateStats();
+  document.getElementById('stat-tokens').textContent = '0';
+  document.getElementById('sc-tokens').textContent = '0';
+  document.getElementById('monitor-count').textContent = '0';
+  toast('Monitor limpo — todos os tokens removidos', 'success');
+  log('Monitor limpo manualmente', 'warn');
 }
 
 function shortAddr(addr, len = 8) {
