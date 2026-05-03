@@ -1287,22 +1287,23 @@
         <div class="card">
           <div class="section-title mb16">Carteira & RPC</div>
           <div class="form-group mb16">
-            <label>URL do Backend (Railway)</label>
-            <input type="text" id="cfg-backend-url" placeholder="https://seu-app.up.railway.app">
-            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">URL do seu serviço no Railway</span>
+            <label>Supabase URL</label>
+            <input type="text" id="cfg-supa-url" placeholder="https://xxxx.supabase.co">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">URL do seu projeto Supabase</span>
           </div>
           <div class="form-group mb16">
-            <label>Chave Privada (Base58)</label>
-            <input type="password" id="cfg-privkey" placeholder="Sua chave privada...">
-            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">Nunca salva localmente — enviada direto ao Railway</span>
+            <label>Supabase Anon Key</label>
+            <input type="password" id="cfg-supa-key" placeholder="eyJ...">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">Chave pública anon — salva localmente</span>
           </div>
           <div class="form-group mb20">
-            <label>RPC Endpoint (QuickNode)</label>
-            <input type="text" id="cfg-rpc" placeholder="https://...quicknode.pro/...">
+            <label>URL do Backend (Railway) — para comandos</label>
+            <input type="text" id="cfg-backend-url" placeholder="https://sol-hunter-production.up.railway.app">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:4px;display:block">Usado apenas como fallback — dashboard usa Supabase diretamente</span>
           </div>
           <div style="background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:8px;padding:12px;margin-bottom:16px">
-            <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:4px">✓ SUPABASE CONFIGURADO NO RAILWAY</div>
-            <div style="font-family:var(--mono);font-size:10px;color:var(--text3)">Banco de dados conectado via variáveis de ambiente do servidor. Nenhuma configuração necessária aqui.</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:4px" id="supa-status-label">○ SUPABASE NÃO CONECTADO</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="supa-status-msg">Configure a URL e Anon Key acima e clique em Conectar.</div>
           </div>
           <button class="btn btn-primary" onclick="saveSettings()">Salvar & Conectar</button>
           <div id="settings-status" style="font-family:var(--mono);font-size:11px;margin-top:12px"></div>
@@ -1364,23 +1365,96 @@ sol-hunter/
 // =====================================================
 // STATE
 // =====================================================
-// Helper: monta URL do Railway para todas as chamadas de API
+// ── SUPABASE CLIENT (direto do browser) ──────────────────────────
+let _supa = null;
+
+function getSupabase() {
+  if (_supa) return _supa;
+  const url = state.config.supaUrl || localStorage.getItem('sh_supa_url') || '';
+  const key = state.config.supaKey || localStorage.getItem('sh_supa_key') || '';
+  if (!url || !key) return null;
+  // Mini-cliente REST sem SDK — compatível com qualquer browser
+  _supa = {
+    url, key,
+    async from(table) {
+      const base = `${url}/rest/v1/${table}`;
+      return {
+        async select(cols='*', opts={}) {
+          let q = base + '?select=' + cols;
+          if (opts.filter) q += '&' + opts.filter;
+          if (opts.order) q += '&order=' + opts.order;
+          if (opts.limit) q += '&limit=' + opts.limit;
+          const r = await fetch(q, { headers: { apikey: key, Authorization: 'Bearer ' + key, Accept: 'application/json' }});
+          if (!r.ok) throw new Error(await r.text());
+          return r.json();
+        },
+        async upsert(row) {
+          const r = await fetch(base, {
+            method: 'POST',
+            headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify(row)
+          });
+          if (!r.ok && r.status !== 200 && r.status !== 201) throw new Error(await r.text());
+          return true;
+        },
+        async insert(row) {
+          const r = await fetch(base, {
+            method: 'POST',
+            headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify(row)
+          });
+          if (!r.ok && r.status !== 201) throw new Error(await r.text());
+          return true;
+        },
+        async update(row, filter) {
+          const r = await fetch(base + '?' + filter, {
+            method: 'PATCH',
+            headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify(row)
+          });
+          if (!r.ok) throw new Error(await r.text());
+          return true;
+        }
+      };
+    },
+    async rpc(fn, params={}) {
+      const r = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+  };
+  return _supa;
+}
+
+// Helper Railway — usado APENAS para enviar comandos de compra/venda
 function api(path) {
   try {
     const inputEl = document.getElementById('cfg-backend-url');
-    if (inputEl && inputEl.value.trim()) {
-      return inputEl.value.trim().replace(/\/$/, '') + path;
-    }
-    if (typeof state !== 'undefined' && state.config && state.config.backendUrl) {
-      return state.config.backendUrl + path;
-    }
+    if (inputEl && inputEl.value.trim()) return inputEl.value.trim().replace(/\/$/, '') + path;
+    if (state.config.backendUrl) return state.config.backendUrl + path;
     const saved = localStorage.getItem('solhunter_config');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.backendUrl) return parsed.backendUrl + path;
-    }
+    if (saved) { const p = JSON.parse(saved); if (p.backendUrl) return p.backendUrl + path; }
   } catch(e) {}
   return path;
+}
+
+// Envia comando para o Railway via Supabase (sem chamar Railway diretamente)
+async function sendCommand(action, payload) {
+  const db = getSupabase();
+  if (!db) throw new Error('Supabase não configurado');
+  const tbl = await db.from('sol_hunter_commands');
+  await tbl.insert({ action, payload: JSON.stringify(payload), status: 'pending', created_at: new Date().toISOString() });
+  // Aguarda resposta por até 30s
+  for (let i = 0; i < 30; i++) {
+    await sleep(1000);
+    const rows = await (await db.from('sol_hunter_commands')).select('*', { filter: 'action=eq.' + action + '&status=neq.pending&order=created_at.desc&limit=1' });
+    if (rows && rows.length && rows[0].status !== 'pending') return rows[0];
+  }
+  throw new Error('Timeout — Railway não respondeu ao comando');
 }
 
 const state = {
@@ -1425,12 +1499,38 @@ function loadState() {
     const savedSales = localStorage.getItem('solhunter_sales');
     if (savedSales) state.sales = JSON.parse(savedSales);
 
+    // Supabase credentials
+    const supaUrl = localStorage.getItem('sh_supa_url') || '';
+    const supaKey = localStorage.getItem('sh_supa_key') || '';
+    if (supaUrl) state.config.supaUrl = supaUrl;
+    if (supaKey) state.config.supaKey = supaKey;
+
     // Restore config inputs
+    if (state.config.supaUrl) { const el = document.getElementById('cfg-supa-url'); if(el) el.value = state.config.supaUrl; }
+    if (state.config.supaKey) { const el = document.getElementById('cfg-supa-key'); if(el) el.value = state.config.supaKey; }
     if (state.config.backendUrl) document.getElementById('cfg-backend-url').value = state.config.backendUrl;
     if (state.config.rpc) document.getElementById('cfg-rpc').value = state.config.rpc;
     if (state.config.interval) document.getElementById('cfg-interval').value = state.config.interval;
     if (state.config.slippage) document.getElementById('cfg-default-slippage').value = state.config.slippage;
+
+    // Atualiza label Supabase
+    if (supaUrl && supaKey) updateSupaStatus(true);
   } catch(e) {}
+}
+
+function updateSupaStatus(ok, msg) {
+  const lbl = document.getElementById('supa-status-label');
+  const msgEl = document.getElementById('supa-status-msg');
+  if (!lbl) return;
+  if (ok) {
+    lbl.textContent = '✓ SUPABASE CONECTADO';
+    lbl.style.color = 'var(--accent)';
+    if (msgEl) msgEl.textContent = msg || 'Banco de dados conectado. Dashboard lê dados diretamente do Supabase.';
+  } else {
+    lbl.textContent = '✗ SUPABASE NÃO CONECTADO';
+    lbl.style.color = 'var(--danger)';
+    if (msgEl) msgEl.textContent = msg || 'Verifique a URL e Anon Key.';
+  }
 }
 
 // =====================================================
@@ -1604,21 +1704,24 @@ function checkTargets(token) {
 }
 
 async function triggerSell(token, target) {
-  log(`Executando venda automática: ${shortAddr(token.mint)} — ${target.pct}%`, 'warn');
+  log(`Enviando comando de venda: ${shortAddr(token.mint)} — ${target.pct}%`, 'warn');
   try {
-    const res = await fetch(api('/sell'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mint: token.mint, pct: target.pct, slippage: target.slip })
-    });
-    if (res.ok) {
-      const d = await res.json();
-      log(`Venda OK: ${shortAddr(token.mint)} — ${d.txid || 'OK'}`, 'success');
-      state.profit += d.solReceived || 0;
-      document.getElementById('stat-profit').textContent = '$' + (state.profit * 50).toFixed(2);
+    // Envia via Supabase — Railway lê e executa sem precisar de conexão direta
+    const db = getSupabase();
+    if (db) {
+      const tbl = await db.from('sol_hunter_commands');
+      await tbl.insert({
+        action: 'sell',
+        payload: JSON.stringify({ mint: token.mint, pct: target.pct, slippage: target.slip }),
+        status: 'pending',
+        created_at: new Date().toISOString()
+      });
+      log(`Comando de venda enviado via Supabase: ${shortAddr(token.mint)}`, 'success');
+    } else {
+      log(`[SIMULAÇÃO] Sem Supabase — venda não executada para ${shortAddr(token.mint)}`, 'warn');
     }
   } catch(e) {
-    log(`[SIMULAÇÃO] Venda disparada para ${shortAddr(token.mint)}`, 'warn');
+    log(`Erro ao enviar comando de venda: ${e.message}`, 'error');
   }
 }
 
@@ -1640,22 +1743,49 @@ async function previewBuy() {
   log(`Buscando tokens da carteira: ${shortAddr(wallet)}`, 'info');
 
   try {
-    const ctl2 = new AbortController();
-    const t2 = setTimeout(() => ctl2.abort(), 30000);
-    const res = await fetch(api(`/wallet-tokens?address=${wallet}&mcMin=${mcMin}&mcMax=${mcMax}&limit=${qty}`), { signal: ctl2.signal });
-    clearTimeout(t2);
-    if (!res.ok) throw new Error('Backend retornou erro ' + res.status);
-    const data = await res.json();
-    state.previewTokens = data.tokens || [];
-    if (state.previewTokens.length === 0) {
-      toast('Nenhum token encontrado nessa carteira no range de MC definido', 'warn');
+    // Busca tokens diretamente via RPC Solana público (sem precisar do Railway)
+    const rpcUrl = 'https://api.mainnet-beta.solana.com';
+    const rpcRes = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1,
+        method: 'getParsedTokenAccountsByOwner',
+        params: [wallet, { programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }, { encoding: 'jsonParsed' }]
+      })
+    });
+    const rpcData = await rpcRes.json();
+    const accounts = rpcData.result?.value || [];
+    const mints = accounts
+      .filter(a => parseInt(a.account.data.parsed.info.tokenAmount.amount) > 0)
+      .map(a => a.account.data.parsed.info.mint)
+      .slice(0, qty);
+
+    if (!mints.length) { toast('Nenhum token encontrado nessa carteira', 'warn'); state.previewTokens = []; }
+    else {
+      // Busca preços via Jupiter (chamada direta — sem precisar do Railway)
+      const withMC = [];
+      for (let i = 0; i < mints.length; i += 100) {
+        const batch = mints.slice(i, i + 100);
+        try {
+          const pr = await fetch('https://price.jup.ag/v6/price?ids=' + batch.join(','));
+          const pd = await pr.json();
+          for (const mint of batch) {
+            const d = pd.data?.[mint];
+            if (!d) continue;
+            const mc = d.price * 1_000_000_000;
+            if (mc >= mcMin && mc <= mcMax) {
+              withMC.push({ mint, price: d.price, mc, liquidity: d.liquidity || 0 });
+            }
+          }
+        } catch(_) {}
+      }
+      state.previewTokens = withMC;
+      if (!withMC.length) toast('Nenhum token no range de MC $' + mcMin + '–$' + mcMax, 'warn');
     }
   } catch(e) {
-    const msg = e.name === 'AbortError'
-      ? 'Timeout — Railway demorou demais. Conecte primeiro nas Configurações.'
-      : 'Erro ao buscar tokens — conecte a carteira nas Configurações primeiro';
-    log(msg, 'error');
-    toast(msg, 'error');
+    log('Erro ao buscar tokens: ' + e.message, 'error');
+    toast('Erro ao buscar tokens: ' + e.message, 'error');
     state.previewTokens = [];
   }
 
@@ -1729,16 +1859,21 @@ async function executeBuy() {
 
     try {
       if (!dryRun) {
-        const res = await fetch(api('/buy'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mint, amountSol, slippage, priority })
-        });
-        if (res.ok) {
-          addBuyLog(`✓ ${shortAddr(mint)} — comprado`, 'success');
+        try {
+          // Envia comando via Supabase — Railway lê e executa
+          const db = getSupabase();
+          if (!db) throw new Error('Supabase não configurado');
+          const tbl = await db.from('sol_hunter_commands');
+          await tbl.insert({
+            action: 'buy',
+            payload: JSON.stringify({ mint, amountSol, slippage, priority }),
+            status: 'pending',
+            created_at: new Date().toISOString()
+          });
+          addBuyLog(`⟳ ${shortAddr(mint)} — comando enviado ao Railway`, 'warn');
           addTokenToMonitor(mint);
-        } else {
-          addBuyLog(`✗ ${shortAddr(mint)} — falhou`, 'error');
+        } catch(e) {
+          addBuyLog(`✗ ${shortAddr(mint)} — ${e.message}`, 'error');
         }
       } else {
         await sleep(80);
@@ -1900,67 +2035,99 @@ function renderWallets() {
 // =====================================================
 // SETTINGS
 // =====================================================
-function saveSettings() {
+async function saveSettings() {
+  // Lê campos
+  const supaUrl = (document.getElementById('cfg-supa-url').value || '').trim().replace(/\/$/, '');
+  const supaKey = (document.getElementById('cfg-supa-key').value || '').trim();
   state.config.backendUrl = (document.getElementById('cfg-backend-url').value || '').trim().replace(/\/$/, '');
-  state.config.rpc = document.getElementById('cfg-rpc').value.trim();
-  state.config.privkey = document.getElementById('cfg-privkey').value.trim();
 
-  // Salva backendUrl e rpc no localStorage (privkey nunca é salva localmente)
-  localStorage.setItem('solhunter_config', JSON.stringify({
-    backendUrl: state.config.backendUrl,
-    rpc: state.config.rpc
-  }));
-
-  document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Conectando...</span>';
-
-  // Envia RPC e PrivKey para o Railway
-  // Usa GET para evitar bloqueio CORS preflight no Chrome mobile
-  const connectUrl = api('/connect')
-    + '?rpc=' + encodeURIComponent(state.config.rpc || '')
-    + '&pk=' + encodeURIComponent(state.config.privkey || '');
-
-  // Helper: fetch com timeout configurável
-  function fetchWithTimeout(url, ms) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ms);
-    return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  if (!supaUrl || !supaKey) {
+    document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ Preencha a URL e Anon Key do Supabase</span>';
+    toast('Preencha os dados do Supabase', 'error');
+    return;
   }
 
-  // Acorda o Railway antes (ping), depois conecta com timeout generoso
-  document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Acordando servidor...</span>';
+  // Salva credenciais Supabase localmente
+  state.config.supaUrl = supaUrl;
+  state.config.supaKey = supaKey;
+  localStorage.setItem('sh_supa_url', supaUrl);
+  localStorage.setItem('sh_supa_key', supaKey);
+  localStorage.setItem('solhunter_config', JSON.stringify({ backendUrl: state.config.backendUrl }));
 
-  fetchWithTimeout(api('/ping'), 15000)
-    .catch(() => {}) // ignora erro do ping — tenta conectar mesmo assim
-    .finally(() => {
-      document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Conectando...</span>';
-      fetchWithTimeout(connectUrl, 30000)
-        .then(r => {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        })
-        .then(d => {
-          if (d.ok || d.connected) {
-            document.getElementById('wallet-display').textContent = '⬡ ' + (d.publicKey ? d.publicKey.slice(0,8) + '...' : 'Carteira configurada');
-            document.getElementById('settings-status').innerHTML = '<span style="color:var(--accent)">✓ Conectado — ' + (d.publicKey || '') + '</span>';
-            document.getElementById('rpc-dot').style.background = 'var(--accent)';
-            document.getElementById('rpc-status').textContent = 'Railway conectado';
-            toast('Conectado com sucesso!', 'success');
-            log('Backend Railway conectado — ' + (d.publicKey || ''), 'success');
-            startCycleTimer();
-          } else {
-            document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + (d.message || 'Erro ao conectar') + '</span>';
-            toast('Erro ao conectar: ' + (d.message || ''), 'error');
-          }
-        })
-        .catch(e => {
-          const msg = e.name === 'AbortError'
-            ? 'Timeout — Railway demorou demais. Tente novamente.'
-            : 'Sem resposta do Railway — verifique a URL';
-          document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ ' + msg + '</span>';
-          toast(msg, 'error');
-          log('Erro ao conectar ao Railway: ' + e.message, 'error');
-        });
-    });
+  // Reseta cliente para forçar reconexão
+  _supa = null;
+
+  document.getElementById('settings-status').innerHTML = '<span style="color:var(--text3)">Verificando Supabase...</span>';
+
+  try {
+    // Testa conexão lendo a tabela de status
+    const db = getSupabase();
+    if (!db) throw new Error('Credenciais inválidas');
+
+    // Tenta ler tabela sol_hunter_status (cria se não existir via Railway)
+    const tbl = await db.from('sol_hunter_status');
+    const rows = await tbl.select('*', { limit: 1 });
+
+    // Sucesso — Supabase conectado
+    updateSupaStatus(true, 'Conectado! Dashboard lê dados diretamente do Supabase.');
+    document.getElementById('settings-status').innerHTML = '<span style="color:var(--accent)">✓ Supabase conectado com sucesso</span>';
+    document.getElementById('rpc-dot').style.background = 'var(--accent)';
+    document.getElementById('rpc-status').textContent = 'Supabase ativo';
+
+    // Tenta carregar status publicado pelo Railway
+    if (rows && rows.length) {
+      const st = rows[0];
+      if (st.public_key) {
+        document.getElementById('wallet-display').textContent = '⬡ ' + st.public_key.slice(0,8) + '...';
+      }
+    }
+
+    toast('Supabase conectado!', 'success');
+    log('Supabase conectado — lendo dados em tempo real', 'success');
+    startCycleTimer();
+
+    // Carrega tokens ativos do Supabase
+    await loadTokensFromSupabase();
+
+  } catch(e) {
+    updateSupaStatus(false, e.message);
+    document.getElementById('settings-status').innerHTML = '<span style="color:var(--danger)">✗ Erro: ' + e.message + '</span>';
+    toast('Erro ao conectar no Supabase: ' + e.message, 'error');
+  }
+}
+
+async function loadTokensFromSupabase() {
+  const db = getSupabase();
+  if (!db) return;
+  try {
+    const tbl = await db.from('sol_hunter_tokens');
+    const rows = await tbl.select('*', { filter: 'status=eq.active' });
+    if (rows && rows.length) {
+      // Mescla com tokens já no estado (não duplica)
+      const existingMints = new Set(state.tokens.map(t => t.mint));
+      for (const r of rows) {
+        if (!existingMints.has(r.mint)) {
+          state.tokens.push({ mint: r.mint, mc: 0, price: 0, addedAt: r.bought_at });
+        }
+      }
+      saveTokens();
+      renderMonitor();
+      updateStats();
+      log('Tokens carregados do Supabase: ' + rows.length, 'success');
+    }
+    // Carrega vendas
+    const stbl = await db.from('sol_hunter_sales');
+    const sales = await stbl.select('*', { order: 'sold_at.desc', limit: '100' });
+    if (sales && sales.length) {
+      state.sales = sales.map(s => ({
+        mint: s.mint, pct: s.pct_sold, sol: s.sol_received,
+        txid: s.txid, at: s.sold_at, trigger: s.trigger
+      }));
+      renderSales();
+    }
+  } catch(e) {
+    log('Erro ao carregar do Supabase: ' + e.message, 'error');
+  }
 }
 
 function saveGlobalParams() {
