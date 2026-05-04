@@ -607,40 +607,102 @@
      MOBILE
   ===================================================== */
   @media (max-width: 768px) {
+    /* Garante que nada ultrapasse a largura da tela */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { overflow-x: hidden; max-width: 100vw; }
+
     .sidebar { display: none; }
-    .main { margin-left: 0; }
-    .topbar { padding: 0 16px; height: 52px; }
-    .topbar-title { font-size: 13px; }
-    .topbar-right { gap: 8px; }
-    .wallet-badge { font-size: 10px; padding: 5px 8px; }
+
+    /* Main ocupa 100% sem margem lateral */
+    .main { margin-left: 0; width: 100%; max-width: 100vw; overflow-x: hidden; }
+
+    /* Topbar: empilha em duas linhas no mobile */
+    .topbar {
+      padding: 0 12px;
+      height: auto;
+      min-height: 52px;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    .topbar-title { font-size: 13px; flex-shrink: 0; }
+    .topbar-right {
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 100%;
+    }
+    /* Esconde "Próximo ciclo" no mobile para não encher a topbar */
+    .topbar-right > .flex-center { display: none; }
+    .wallet-badge { font-size: 10px; padding: 5px 8px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sol-balance { font-size: 11px; }
-    .page { padding: 16px 14px 90px; }
+
+    /* Páginas: padding generoso nas laterais e espaço pro bottom-nav */
+    .page { padding: 14px 12px 90px; width: 100%; max-width: 100vw; overflow-x: hidden; }
+
+    /* Stats: 2 colunas */
     .stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
-    .stat-card { padding: 14px; }
-    .card { padding: 16px; border-radius: 10px; }
+    .stat-card { padding: 12px; }
+    .stat-value { font-size: 20px; }
+
+    /* Cards */
+    .card { padding: 14px; border-radius: 10px; }
+
+    /* Grids inline de 2 ou mais colunas viram coluna única */
+    .form-grid.cols2,
+    .form-grid.cols3,
+    .form-grid.cols4 { grid-template-columns: 1fr !important; }
+
+    /* Qualquer div com grid inline de múltiplas colunas colapsa */
+    div[style*="grid-template-columns: 1fr 1fr"],
     div[style*="grid-template-columns:1fr 1fr"],
-    div[style*="grid-template-columns: 1fr 1fr"] {
+    div[style*="grid-template-columns: repeat(2"],
+    div[style*="grid-template-columns:repeat(2"],
+    div[style*="grid-template-columns: repeat(3"],
+    div[style*="grid-template-columns:repeat(3"],
+    div[style*="grid-template-columns: repeat(4"],
+    div[style*="grid-template-columns:repeat(4"] {
       display: flex !important;
       flex-direction: column !important;
+      gap: 12px !important;
     }
-    div[style*="grid-template-columns:repeat(3"] {
-      display: flex !important;
-      flex-direction: column !important;
-    }
-    .btn { padding: 12px 18px; font-size: 13px; min-height: 44px; }
+
+    /* Botões com boa área de toque */
+    .btn { padding: 12px 16px; font-size: 13px; min-height: 44px; }
     .btn-sm { padding: 8px 12px; font-size: 12px; min-height: 36px; }
     .btn-lg { padding: 14px 20px; font-size: 14px; min-height: 50px; }
+
+    /* Impede zoom ao focar inputs no iOS */
     input, select, textarea {
       font-size: 16px !important;
       min-height: 44px;
       padding: 10px 12px !important;
     }
+
+    /* Monitor grid: 1 coluna */
+    .monitor-grid { grid-template-columns: 1fr !important; }
     #token-grid { grid-template-columns: 1fr !important; }
-    #log-feed { max-height: 180px; font-size: 11px; }
-    .form-grid.cols2, .form-grid.cols3, .form-grid.cols4 {
-      display: flex !important;
-      flex-direction: column !important;
-    }
+
+    /* Log menor */
+    .log-feed { max-height: 180px; font-size: 11px; }
+
+    /* Tabelas: scroll horizontal contido */
+    .table-wrap { overflow-x: auto; max-width: 100%; }
+    table { min-width: 0; }
+
+    /* Target blocks */
+    .target-block { padding: 14px; }
+
+    /* Info/warn boxes */
+    .info-box, .warn-box { font-size: 10px; padding: 10px 12px; }
+
+    /* Toast no mobile: largura da tela */
+    #toast-container { left: 12px; right: 12px; bottom: 72px; }
+    .toast { min-width: 0; width: 100%; }
+
+    /* Toggle group responsivo */
+    .toggle-group { flex-wrap: wrap; }
   }
 
   /* Bottom nav — só no mobile */
@@ -1939,7 +2001,7 @@ function toggleSelectAll() {
 // Retorna o status final: 'done' | 'skipped' | 'error' | 'timeout'
 async function waitForCommandResult(db, cmdId, timeoutMs = 60000) {
   const start = Date.now();
-  const pollInterval = 2000; // verifica a cada 2s
+  const pollInterval = 2000;
   while (Date.now() - start < timeoutMs) {
     await sleep(pollInterval);
     try {
@@ -1983,7 +2045,6 @@ async function executeBuy() {
         const db = getSupabase();
         if (!db) throw new Error('Supabase não configurado');
 
-        // 1. Envia comando para o Railway
         const { data: inserted, error: insertErr } = await db.from('sol_hunter_commands')
           .insert({
             action: 'buy',
@@ -1998,26 +2059,23 @@ async function executeBuy() {
 
         addBuyLog(`⟳ ${shortAddr(mint)} — aguardando Railway confirmar compra...`, 'warn');
 
-        // 2. Aguarda Railway executar e confirmar (máx 60s)
+        // Aguarda Railway executar e confirmar na blockchain (máx 60s)
         const cmdResult = await waitForCommandResult(db, inserted.id, 60000);
 
         if (cmdResult.status === 'done') {
-          // Compra confirmada na blockchain — só agora adiciona ao monitor
           addBuyLog(`✓ ${shortAddr(mint)} — compra confirmada!`, 'success');
           addTokenToMonitor(mint);
           bought++;
         } else if (cmdResult.status === 'skipped') {
           addBuyLog(`— ${shortAddr(mint)} — já possui esse token, pulado`, 'info');
         } else if (cmdResult.status === 'timeout') {
-          addBuyLog(`⏱ ${shortAddr(mint)} — timeout: Railway não confirmou. Token NÃO adicionado ao monitor.`, 'error');
+          addBuyLog(`⏱ ${shortAddr(mint)} — timeout: Railway não confirmou. Token NÃO adicionado.`, 'error');
           failed++;
         } else {
-          // status === 'error' ou 'cancelled'
           addBuyLog(`✗ ${shortAddr(mint)} — FALHA: ${cmdResult.result}`, 'error');
           failed++;
         }
       } else {
-        // Modo simulação
         await sleep(80);
         addBuyLog(`[SIM] ${shortAddr(mint)} — simulado OK`, 'warn');
         addTokenToMonitor(mint);
@@ -2026,7 +2084,6 @@ async function executeBuy() {
     } catch(e) {
       addBuyLog(`✗ ${shortAddr(mint)} — erro inesperado: ${e.message}`, 'error');
       failed++;
-      // NÃO adiciona ao monitor em caso de erro
     }
   }
 
