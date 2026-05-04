@@ -1420,6 +1420,7 @@ function getSupabase() {
           if (opts.filter) q += '&' + opts.filter;
           if (opts.order) q += '&order=' + opts.order;
           if (opts.limit) q += '&limit=' + opts.limit;
+          if (opts.filters) for (const [k,v] of Object.entries(opts.filters)) q += '&' + k + '=' + v;
           const r = await fetch(q, { headers: { apikey: key, Authorization: 'Bearer ' + key, Accept: 'application/json' }});
           if (!r.ok) throw new Error(await r.text());
           return r.json();
@@ -2071,7 +2072,8 @@ async function executeBuy() {
 
 function addTokenToMonitor(mint) {
   if (!state.tokens.find(t => t.mint === mint)) {
-    state.tokens.push({ mint, mc: 0, price: 0, supply: 1e9, targetHit: {} });
+    state.tokens.push({ mint, mc: 0, price: 0, supply: 1_000_000_000, targetHit: {}, addedAt: new Date().toISOString() });
+    saveTokens();
     document.getElementById('stat-tokens').textContent = state.tokens.length;
     document.getElementById('sc-tokens').textContent = state.tokens.length;
     document.getElementById('monitor-count').textContent = state.tokens.length;
@@ -2081,10 +2083,23 @@ function addTokenToMonitor(mint) {
 // =====================================================
 // SELL
 // =====================================================
-function loadSellPreview() {
+async function loadSellPreview() {
+  // Se não há tokens no state local, tenta sincronizar do Supabase antes
+  if (state.tokens.length === 0 && getSupabase()) {
+    log('Sincronizando tokens do Supabase antes de carregar seleção de venda...', 'info');
+    await syncTokensFromSupabase();
+  }
+
   const qty = parseInt(document.getElementById('sell-qty').value) || 50;
   const criteria = document.getElementById('sell-criteria').value;
   const mcMin = parseFloat(document.getElementById('sell-mc-min').value) || 0;
+
+  if (state.tokens.length === 0) {
+    document.getElementById('sell-preview-table').innerHTML =
+      '<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:24px">Nenhum token encontrado. Verifique se o Supabase está conectado.</td></tr>';
+    document.getElementById('sell-total-count').textContent = '0 tokens';
+    return;
+  }
 
   let eligible = state.tokens.filter(t => t.mc >= mcMin);
   if (criteria === 'highest-mc') eligible.sort((a,b) => b.mc - a.mc);
@@ -2101,7 +2116,7 @@ function loadSellPreview() {
       <td><span class="badge badge-blue">$${fmtNum(t.mc)}</span></td>
       <td style="color:var(--text2)">—</td>
     </tr>
-  `).join('') || `<tr><td colspan="3" style="text-align:center;color:var(--text3)">Nenhum token</td></tr>`;
+  `).join('') || `<tr><td colspan="3" style="text-align:center;color:var(--text3)">Nenhum token elegível</td></tr>`;
 }
 
 async function executeSell() {
@@ -2243,9 +2258,9 @@ async function saveSettings() {
     const db = getSupabase();
     if (!db) throw new Error('Credenciais inválidas');
 
-    // Tenta ler tabela sol_hunter_status (cria se não existir via Railway)
-    const tbl = await db.from('sol_hunter_status');
-    const rows = await tbl.select('*', { limit: 1 });
+    // Tenta ler tabela sol_hunter_status (publica pelo Railway)
+    const stbl = await db.from('sol_hunter_status');
+    const rows = await stbl.select('*', { filter: 'id=eq.1', limit: '1' });
 
     // Sucesso — Supabase conectado
     updateSupaStatus(true, 'Conectado! Dashboard lê dados diretamente do Supabase.');
@@ -2253,11 +2268,14 @@ async function saveSettings() {
     document.getElementById('rpc-dot').style.background = 'var(--accent)';
     document.getElementById('rpc-status').textContent = 'Supabase ativo';
 
-    // Tenta carregar status publicado pelo Railway
+    // Lê status publicado pelo Railway (carteira + saldo + token_count)
     if (rows && rows.length) {
       const st = rows[0];
       if (st.public_key) {
         document.getElementById('wallet-display').textContent = '⬡ ' + st.public_key.slice(0,8) + '...';
+      }
+      if (st.balance_sol !== undefined) {
+        document.getElementById('sol-balance').textContent = parseFloat(st.balance_sol).toFixed(4) + ' SOL';
       }
     }
 
@@ -2276,6 +2294,10 @@ async function saveSettings() {
 
     // Carrega tokens ativos do Supabase
     await loadTokensFromSupabase();
+    // Inicia polling a cada 30s
+    if (!window._supaPolling) {
+      window._supaPolling = setInterval(pollSupabaseStatus, 30000);
+    }
 
   } catch(e) {
     updateSupaStatus(false, e.message);
@@ -2287,10 +2309,26 @@ async function saveSettings() {
 async function loadTokensFromSupabase() {
   const db = getSupabase();
   if (!db) return;
+
+  // ── 1. Lê status publicado pelo Railway (saldo + token_count on-chain) ─────
   try {
-    // Carrega config salva (RPC etc)
+    const statusTbl = await db.from('sol_hunter_status');
+    const statusRows = await statusTbl.select('*', { filter: 'id=eq.1', limit: '1' });
+    if (statusRows && statusRows.length) {
+      const st = statusRows[0];
+      if (st.public_key) {
+        document.getElementById('wallet-display').textContent = '⬡ ' + st.public_key.slice(0,8) + '...';
+      }
+      if (st.balance_sol !== undefined) {
+        document.getElementById('sol-balance').textContent = parseFloat(st.balance_sol).toFixed(4) + ' SOL';
+      }
+    }
+  } catch(e) { /* tabela pode não existir */ }
+
+  // ── 2. Carrega RPC salvo ────────────────────────────────────────────────────
+  try {
     const cfgTbl = await db.from('sol_hunter_config');
-    const cfgRows = await cfgTbl.select('*', { limit: 1 });
+    const cfgRows = await cfgTbl.select('*', { filter: 'id=eq.1', limit: '1' });
     if (cfgRows && cfgRows.length && cfgRows[0].rpc_url) {
       state.config.rpc = cfgRows[0].rpc_url;
       localStorage.setItem('sh_rpc_url', cfgRows[0].rpc_url);
@@ -2299,21 +2337,28 @@ async function loadTokensFromSupabase() {
       log('RPC carregado do Supabase', 'success');
     }
   } catch(e) { /* tabela pode não existir ainda */ }
+
+  // ── 3. Carrega tokens ativos do Supabase ────────────────────────────────────
   try {
     const tbl = await db.from('sol_hunter_tokens');
+    // Filtro correto PostgREST: status=eq.active
     const rows = await tbl.select('*', { filter: 'status=eq.active' });
     if (rows && rows.length) {
       const existingMints = new Set(state.tokens.map(t => t.mint));
       for (const r of rows) {
         if (!existingMints.has(r.mint)) {
-          state.tokens.push({ mint: r.mint, mc: 0, price: 0, addedAt: r.bought_at });
+          state.tokens.push({ mint: r.mint, mc: 0, price: 0, supply: 1e9, targetHit: {}, addedAt: r.bought_at });
         }
       }
       saveTokens();
       renderMonitor();
       updateStats();
       log('Tokens carregados do Supabase: ' + rows.length, 'success');
+    } else {
+      log('Nenhum token ativo no Supabase', 'info');
     }
+
+    // ── 4. Carrega vendas ───────────────────────────────────────────────────
     const stbl = await db.from('sol_hunter_sales');
     const sales = await stbl.select('*', { order: 'sold_at.desc', limit: '100' });
     if (sales && sales.length) {
@@ -2328,7 +2373,63 @@ async function loadTokensFromSupabase() {
   }
 }
 
-function saveGlobalParams() {
+// =====================================================
+// POLLING — atualiza status do Railway a cada 30s
+// =====================================================
+async function pollSupabaseStatus() {
+  const db = getSupabase();
+  if (!db) return;
+  try {
+    // Atualiza saldo e token_count a partir do status publicado pelo Railway
+    const stbl = await db.from('sol_hunter_status');
+    const rows = await stbl.select('*', { filter: 'id=eq.1', limit: '1' });
+    if (rows && rows.length) {
+      const st = rows[0];
+      if (st.public_key) document.getElementById('wallet-display').textContent = '⬡ ' + st.public_key.slice(0,8) + '...';
+      if (st.balance_sol !== undefined) document.getElementById('sol-balance').textContent = parseFloat(st.balance_sol).toFixed(4) + ' SOL';
+      // Sincroniza token_count do Railway → state.tokens (para quando tokens foram adicionados via Phantom)
+      // Faz re-sync completo de tokens se count divergir
+      const railwayCount = parseInt(st.token_count) || 0;
+      if (railwayCount !== state.tokens.length && railwayCount > 0) {
+        await syncTokensFromSupabase();
+      }
+    }
+  } catch(e) { /* silencia — pode não ter Supabase configurado */ }
+}
+
+// Sync incremental de tokens — só adiciona os que faltam no state local
+async function syncTokensFromSupabase() {
+  const db = getSupabase();
+  if (!db) return;
+  try {
+    const tbl = await db.from('sol_hunter_tokens');
+    const rows = await tbl.select('*', { filter: 'status=eq.active' });
+    if (!rows || !rows.length) return;
+    const existingMints = new Set(state.tokens.map(t => t.mint));
+    let novos = 0;
+    for (const r of rows) {
+      if (!existingMints.has(r.mint)) {
+        state.tokens.push({ mint: r.mint, mc: 0, price: 0, supply: 1e9, targetHit: {}, addedAt: r.bought_at });
+        novos++;
+      }
+    }
+    // Remove tokens que sumiram da carteira (status != active)
+    const activeMints = new Set(rows.map(r => r.mint));
+    const before = state.tokens.length;
+    state.tokens = state.tokens.filter(t => activeMints.has(t.mint));
+    const removed = before - state.tokens.length;
+
+    if (novos > 0 || removed > 0) {
+      saveTokens();
+      renderMonitor();
+      updateStats();
+      if (novos > 0) log(`${novos} token(s) novo(s) detectado(s) no Supabase`, 'success');
+      if (removed > 0) log(`${removed} token(s) removido(s) (saíram da carteira)`, 'warn');
+    }
+  } catch(e) { /* silencia */ }
+}
+
+
   state.config.interval = parseInt(document.getElementById('cfg-interval').value) || 120;
   state.config.slippage = parseInt(document.getElementById('cfg-default-slippage').value) || 15;
   state.config.commitment = document.getElementById('cfg-commitment').value;
@@ -2472,6 +2573,12 @@ window.addEventListener('load', () => {
   startCycleTimer();
   log('SOL Hunter inicializado', 'success');
   log(`${state.tokens.length} tokens carregados do storage`, 'info');
+  // Se Supabase já configurado (salvo no localStorage), carrega tokens imediatamente
+  if (getSupabase()) {
+    loadTokensFromSupabase();
+    // Polling a cada 30s para manter saldo + tokens sincronizados com o Railway
+    setInterval(pollSupabaseStatus, 30000);
+  }
 });
 </script>
 </body>
