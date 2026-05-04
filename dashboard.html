@@ -2444,28 +2444,47 @@ function renderMonitor() {
   const tokens = state.tokens;
   document.getElementById('monitor-count').textContent = tokens.length;
 
-  if (state.monitorView === 'grid') {
-    const grid = document.getElementById('token-grid');
-    if (!tokens.length) {
-      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px;font-family:var(--mono);font-size:13px;color:var(--text3)">Nenhum token monitorado ainda.<br><span style="font-size:11px">Use a aba Compras para adicionar tokens.</span></div>';
-      return;
-    }
+  // GRADE
+  const grid = document.getElementById('token-grid');
+  if (!tokens.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px;font-family:var(--mono);font-size:13px;color:var(--text3)">Nenhum token monitorado ainda.<br><span style=\'font-size:11px\'>Use a aba Compras para adicionar tokens.</span></div>';
+  } else {
     grid.innerHTML = tokens.map(t => {
       const change = t.prevMc ? ((t.mc - t.prevMc) / t.prevMc * 100).toFixed(1) : '0.0';
       const pumping = parseFloat(change) > 20;
-      return `
-        <div class="token-card ${pumping ? 'pumping' : ''}">
-          <div class="token-addr">${shortAddr(t.mint)}</div>
-          <div class="token-mc">$${fmtNum(t.mc)}</div>
-          <div class="token-change ${parseFloat(change) >= 0 ? 'up' : 'down'}">${parseFloat(change) >= 0 ? '+' : ''}${change}%</div>
-          <div class="token-targets">
-            ${state.targets.slice(0, state.targetCount).map((tg, i) => {
-              const hit = t.targetHit?.[`t${i+1}`];
-              return `<span class="badge ${hit ? 'badge-green' : 'badge-gray'}" style="font-size:9px">${hit ? '✓' : '○'} T${i+1}</span>`;
-            }).join('')}
-          </div>
-        </div>
-      `;
+      const targetsHtml = state.targets.slice(0, state.targetCount).map((tg, i) => {
+        const hit = t.targetHit && t.targetHit['t'+(i+1)];
+        return '<span class="badge ' + (hit ? 'badge-green' : 'badge-gray') + '" style="font-size:9px">' + (hit ? '\u2713' : '\u25cb') + ' T'+(i+1)+'</span>';
+      }).join('');
+      return '<div class="token-card ' + (pumping ? 'pumping' : '') + '">'
+        + '<div class="token-addr">' + shortAddr(t.mint) + '</div>'
+        + '<div class="token-mc">$' + fmtNum(t.mc) + '</div>'
+        + '<div class="token-change ' + (parseFloat(change) >= 0 ? 'up' : 'down') + '">' + (parseFloat(change) >= 0 ? '+' : '') + change + '%</div>'
+        + '<div class="token-targets">' + targetsHtml + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  // TABELA
+  const tbody = document.getElementById('monitor-table-body');
+  if (!tokens.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Nenhum token</td></tr>';
+  } else {
+    tbody.innerHTML = tokens.map(t => {
+      const change = t.prevMc ? ((t.mc - t.prevMc) / t.prevMc * 100).toFixed(1) : '0.0';
+      const changeColor = parseFloat(change) >= 0 ? 'var(--accent)' : 'var(--danger)';
+      const t1 = state.targets[0] ? (t.targetHit && t.targetHit.t1 ? '<span class="badge badge-green">\u2713 Atingido</span>' : '<span class="badge badge-gray">\u25cb Aguardando</span>') : '\u2014';
+      const t2 = state.targets[1] ? (t.targetHit && t.targetHit.t2 ? '<span class="badge badge-green">\u2713 Atingido</span>' : '<span class="badge badge-gray">\u25cb Aguardando</span>') : '\u2014';
+      const t3 = state.targets[2] ? (t.targetHit && t.targetHit.t3 ? '<span class="badge badge-green">\u2713 Atingido</span>' : '<span class="badge badge-gray">\u25cb Aguardando</span>') : '\u2014';
+      return '<tr>'
+        + '<td style="font-family:var(--mono);font-size:11px">' + shortAddr(t.mint) + '</td>'
+        + '<td><span class="badge badge-blue">$' + fmtNum(t.mc) + '</span></td>'
+        + '<td style="color:' + changeColor + ';font-family:var(--mono);font-size:11px">' + (parseFloat(change) >= 0 ? '+' : '') + change + '%</td>'
+        + '<td>' + t1 + '</td>'
+        + '<td>' + t2 + '</td>'
+        + '<td>' + t3 + '</td>'
+        + '<td><span class="badge ' + (t.mc > 0 ? 'badge-green' : 'badge-gray') + '">' + (t.mc > 0 ? '\u25cf Ativo' : '\u25cb Sem preco') + '</span></td>'
+        + '</tr>';
     }).join('');
   }
 }
