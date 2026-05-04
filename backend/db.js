@@ -9,8 +9,6 @@ function init(client) {
 }
 
 async function ensureTables() {
-  // As tabelas devem ser criadas no Supabase dashboard
-  // Veja o README para o SQL de criação
   console.log('[DB] Supabase conectado');
 }
 
@@ -24,6 +22,17 @@ async function saveToken(token) {
     status: token.status || 'active'
   }, { onConflict: 'mint' });
   if (error) console.error('[DB] Erro ao salvar token:', error.message);
+}
+
+// ✅ Marca token como vendido manualmente (saiu da carteira)
+async function markTokenSold(mint) {
+  if (!supabase) return;
+  const { error } = await supabase
+    .from('sol_hunter_tokens')
+    .update({ status: 'sold_manual' })
+    .eq('mint', mint)
+    .eq('status', 'active'); // só atualiza se ainda estava ativo
+  if (error) console.error('[DB] Erro ao marcar token como vendido:', error.message);
 }
 
 // Registra venda
@@ -63,4 +72,4 @@ async function getSales(limit = 100) {
   return data || [];
 }
 
-module.exports = { init, saveToken, recordSale, getActiveTokens, getSales };
+module.exports = { init, saveToken, markTokenSold, recordSale, getActiveTokens, getSales };

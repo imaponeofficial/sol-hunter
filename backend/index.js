@@ -72,7 +72,16 @@ function initConnections() {
     wallet.init(connection, keypair);
     buyer.init(connection, keypair, config);
     seller.init(connection, keypair, config);
-    monitor.init(connection, config, handleTargetHit);
+    // ✅ Passa getMyTokens, saveToken e markTokenSold para o monitor
+    //    sincronizar a carteira automaticamente a cada ciclo
+    monitor.init(
+      connection,
+      config,
+      handleTargetHit,
+      wallet.getMyTokens.bind(wallet),
+      db.saveToken.bind(db),
+      db.markTokenSold.bind(db)
+    );
 
     console.log('[SOL Hunter] Carteira: ' + keypair.publicKey.toBase58());
     return true;

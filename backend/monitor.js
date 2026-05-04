@@ -1,9 +1,16 @@
 // backend/monitor.js
 // Ciclo de monitoramento — Jupiter Price API em batches de 100
+// ✅ Lê carteira on-chain a cada ciclo:
+//    - Adiciona tokens novos (comprados no dashboard ou Phantom)
+//    - Remove tokens que saíram da carteira (vendidos manualmente)
 
 const fetch = require('node-fetch');
 
 let connection, config, onTargetHit;
+let getWalletTokensFn = null; // injetado pelo index.js — wallet.getMyTokens
+let saveTokenFn      = null; // injetado pelo index.js — db.saveToken
+let markSoldFn       = null; // injetado pelo index.js — db.markTokenSold
+
 let tokens = {}; // { mint: { mint, mc, price, supply, targetHit: {} } }
 let targets = [];
 let targetCount = 1;
@@ -20,15 +27,18 @@ const BATCH_SIZE = 100;
 // =====================================================
 // Init
 // =====================================================
-function init(conn, cfg, targetHitCallback) {
-  connection = conn;
-  config = cfg;
-  onTargetHit = targetHitCallback;
+function init(conn, cfg, targetHitCallback, getMyTokens, saveToken, markTokenSold) {
+  connection    = conn;
+  config        = cfg;
+  onTargetHit   = targetHitCallback;
+  getWalletTokensFn = getMyTokens;
+  saveTokenFn       = saveToken;
+  markSoldFn        = markTokenSold;
 }
 
 function start() {
   if (intervalHandle) clearInterval(intervalHandle);
-  runCycle(); // Run immediately on start
+  runCycle(); // Roda imediatamente ao iniciar
   intervalHandle = setInterval(runCycle, config.monitorInterval || 120000);
   nextCycleAt = Date.now() + (config.monitorInterval || 120000);
   console.log(`[Monitor] Iniciado — intervalo: ${(config.monitorInterval||120000)/1000}s`);
@@ -40,9 +50,77 @@ function stop() {
 }
 
 // =====================================================
+// Sincroniza carteira on-chain
+// ✅ Adiciona tokens novos
+// ✅ Remove tokens que saíram da carteira (venda manual)
+// =====================================================
+async function syncWalletTokens() {
+  if (!getWalletTokensFn) return;
+  try {
+    const walletTokens = await getWalletTokensFn();
+
+    // Monta set com os mints que estão na carteira agora
+    const walletMints = new Set(walletTokens.map(t => t.mint));
+
+    // --- Adiciona tokens novos ---
+    let novos = 0;
+    for (const t of walletTokens) {
+      if (!tokens[t.mint]) {
+        tokens[t.mint] = {
+          mint: t.mint,
+          mc: 0,
+          price: 0,
+          supply: 1_000_000_000,
+          targetHit: {},
+          addedAt: new Date().toISOString(),
+          source: 'wallet'
+        };
+        novos++;
+        // Persiste no Supabase para sobreviver a restarts
+        if (saveTokenFn) {
+          await saveTokenFn({
+            mint: t.mint,
+            bought_at: new Date().toISOString(),
+            entry_sol: 0, // compra manual — valor desconhecido
+            status: 'active'
+          });
+        }
+      }
+    }
+
+    // --- Remove tokens que saíram da carteira ---
+    let removidos = 0;
+    for (const mint of Object.keys(tokens)) {
+      if (!walletMints.has(mint)) {
+        console.log(`[Monitor] 🔴 Token saiu da carteira (venda manual detectada): ${mint.slice(0,8)}...`);
+        delete tokens[mint];
+        removidos++;
+        // Atualiza status no Supabase
+        if (markSoldFn) {
+          await markSoldFn(mint);
+        }
+      }
+    }
+
+    if (novos > 0) {
+      console.log(`[Monitor] ✅ ${novos} token(s) novo(s) detectado(s) na carteira. Total monitorado: ${Object.keys(tokens).length}`);
+    }
+    if (removidos > 0) {
+      console.log(`[Monitor] 🗑️  ${removidos} token(s) removido(s) do monitor. Total monitorado: ${Object.keys(tokens).length}`);
+    }
+
+  } catch(e) {
+    console.error(`[Monitor] Erro ao sincronizar carteira: ${e.message}`);
+  }
+}
+
+// =====================================================
 // Main cycle
 // =====================================================
 async function runCycle() {
+  // Primeiro sincroniza a carteira — adiciona novos e remove vendidos
+  await syncWalletTokens();
+
   const mints = Object.keys(tokens);
   if (!mints.length) return;
 
@@ -52,7 +130,7 @@ async function runCycle() {
 
   console.log(`[Monitor] Ciclo #${stats.cycles} — ${mints.length} tokens`);
 
-  // Batch into groups of BATCH_SIZE
+  // Processa em batches de 100
   for (let i = 0; i < mints.length; i += BATCH_SIZE) {
     const batch = mints.slice(i, i + BATCH_SIZE);
     await processBatch(batch);
@@ -66,16 +144,13 @@ async function processBatch(mints) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    // ✅ A API v2 retorna data.data[mint].price — mesma estrutura, compatível
     for (const [mint, priceData] of Object.entries(data.data || {})) {
       if (!tokens[mint]) continue;
       const token = tokens[mint];
 
       token.prevMc = token.mc;
-      // ✅ API v2: o preço está em priceData.price (igual à v1)
-      token.price = priceData.price;
-      // Market cap = price * supply (supply estimado de 1B se não disponível)
-      token.mc = priceData.price * (token.supply || 1_000_000_000);
+      token.price  = priceData.price;
+      token.mc     = priceData.price * (token.supply || 1_000_000_000);
 
       checkTargets(token);
       checkStopLoss(token);
@@ -95,7 +170,6 @@ function checkTargets(token) {
     if (!t) continue;
     const key = `t${i+1}`;
 
-    // Já disparou este alvo para este token?
     if (token.targetHit?.[key]) continue;
 
     if (token.mc >= t.mc) {
@@ -140,9 +214,9 @@ function removeToken(mint) {
 }
 
 function setTargets(newTargets, count, after, stopLoss) {
-  targets = newTargets || [];
+  targets    = newTargets || [];
   targetCount = count || 1;
-  afterLast = after || 'hold';
+  afterLast  = after || 'hold';
   stopLossMc = stopLoss || 0;
   console.log(`[Monitor] Alvos atualizados — ${targetCount} alvos configurados`);
 }

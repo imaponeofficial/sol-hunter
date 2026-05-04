@@ -38,7 +38,8 @@ async function getWalletTokens(address, { mcMin = 2000, mcMax = 3000, limit = 50
     for (let i = 0; i < mints.length; i += 100) {
       const batch = mints.slice(i, i + 100);
       try {
-        const url = `https://price.jup.ag/v6/price?ids=${batch.join(',')}`;
+        // ✅ URL atualizada — a antiga (price.jup.ag/v6/price) foi descontinuada
+        const url = `https://api.jup.ag/price/v2?ids=${batch.join(',')}`;
         const res = await fetch(url, { timeout: 8000 });
         const data = await res.json();
 
