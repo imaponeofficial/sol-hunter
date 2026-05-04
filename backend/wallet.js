@@ -38,20 +38,21 @@ async function getWalletTokens(address, { mcMin = 2000, mcMax = 3000, limit = 50
     for (let i = 0; i < mints.length; i += 100) {
       const batch = mints.slice(i, i + 100);
       try {
-        // ✅ URL atualizada — a antiga (price.jup.ag/v6/price) foi descontinuada
-        const url = `https://api.jup.ag/price/v2?ids=${batch.join(',')}`;
+        // ✅ URL atualizada para v3 — versão atual da Jupiter Price API (sem API key)
+        const url = `https://lite-api.jup.ag/price/v3?ids=${batch.join(',')}`;
         const res = await fetch(url, { timeout: 8000 });
         const data = await res.json();
 
         for (const mint of batch) {
           const priceData = data.data?.[mint];
           if (!priceData) continue;
-          const mc = priceData.price * 1_000_000_000; // supply estimado 1B
+          // ✅ Jupiter v3 retorna usdPrice (antes era price na v2)
+          const mc = priceData.usdPrice * 1_000_000_000; // supply estimado 1B
 
           if (mc >= mcMin && mc <= mcMax) {
             withMC.push({
               mint,
-              price: priceData.price,
+              price: priceData.usdPrice,
               mc,
               liquidity: priceData.liquidity || 0,
               alreadyOwned: await ownsToken(mint)

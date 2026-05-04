@@ -20,8 +20,8 @@ let intervalHandle = null;
 let nextCycleAt = null;
 let stats = { cycles: 0, sells: 0, errors: 0, lastCycle: null };
 
-// ✅ URL atualizada — a antiga (price.jup.ag/v6/price) foi descontinuada
-const JUPITER_PRICE_URL = 'https://api.jup.ag/price/v2';
+// ✅ URL atualizada para v3 — versão atual da Jupiter Price API (sem API key)
+const JUPITER_PRICE_URL = 'https://lite-api.jup.ag/price/v3';
 const BATCH_SIZE = 100;
 
 // =====================================================
@@ -149,8 +149,9 @@ async function processBatch(mints) {
       const token = tokens[mint];
 
       token.prevMc = token.mc;
-      token.price  = priceData.price;
-      token.mc     = priceData.price * (token.supply || 1_000_000_000);
+      // ✅ Jupiter v3 retorna usdPrice (antes era price na v2)
+      token.price  = priceData.usdPrice;
+      token.mc     = priceData.usdPrice * (token.supply || 1_000_000_000);
 
       checkTargets(token);
       checkStopLoss(token);
