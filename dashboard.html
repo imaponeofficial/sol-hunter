@@ -1533,6 +1533,8 @@ function loadState() {
     if (savedWallets) state.sourceWallets = JSON.parse(savedWallets);
     const savedTargets = localStorage.getItem('solhunter_targets');
     if (savedTargets) state.targets = JSON.parse(savedTargets);
+    const savedTargetCount = localStorage.getItem('solhunter_targetCount');
+    if (savedTargetCount) state.targetCount = parseInt(savedTargetCount);
     const savedSales = localStorage.getItem('solhunter_sales');
     if (savedSales) state.sales = JSON.parse(savedSales);
 
@@ -1558,6 +1560,21 @@ function loadState() {
 
     // Atualiza label Supabase
     if (supaUrl && supaKey) updateSupaStatus(true);
+
+    // Restaura inputs dos alvos com os valores salvos
+    for (let i = 0; i < 3; i++) {
+      const t = state.targets[i];
+      if (!t) continue;
+      const mcEl = document.getElementById('t'+(i+1)+'-mc');
+      const pctEl = document.getElementById('t'+(i+1)+'-pct');
+      const slipEl = document.getElementById('t'+(i+1)+'-slip');
+      if (mcEl && t.mc) mcEl.value = t.mc;
+      if (pctEl && t.pct) pctEl.value = t.pct;
+      if (slipEl && t.slip) slipEl.value = t.slip;
+    }
+    // Restaura quantidade de alvos ativos (1, 2 ou 3)
+    if (state.targetCount) setTargetCount(state.targetCount);
+
   } catch(e) {}
 }
 
@@ -2155,6 +2172,7 @@ function saveTargets() {
     state.targets[i].slip = parseFloat(document.getElementById(`t${i+1}-slip`).value) || 15;
   }
   localStorage.setItem('solhunter_targets', JSON.stringify(state.targets));
+  localStorage.setItem('solhunter_targetCount', state.targetCount);
   document.getElementById('targets-saved-indicator').textContent = '✓ Alvos salvos às ' + new Date().toTimeString().slice(0,8);
   document.getElementById('targets-saved-indicator').style.color = 'var(--accent)';
   toast('Alvos salvos com sucesso!', 'success');
@@ -2366,7 +2384,7 @@ async function loadTokensFromSupabase() {
         mint: s.mint, pct: s.pct_sold, sol: s.sol_received,
         txid: s.txid, at: s.sold_at, trigger: s.trigger
       }));
-      renderSales();
+      renderSalesTable();
     }
   } catch(e) {
     log('Erro ao carregar do Supabase: ' + e.message, 'error');
