@@ -13,7 +13,8 @@ let intervalHandle = null;
 let nextCycleAt = null;
 let stats = { cycles: 0, sells: 0, errors: 0, lastCycle: null };
 
-const JUPITER_PRICE_URL = 'https://price.jup.ag/v6/price';
+// ✅ URL atualizada — a antiga (price.jup.ag/v6/price) foi descontinuada
+const JUPITER_PRICE_URL = 'https://api.jup.ag/price/v2';
 const BATCH_SIZE = 100;
 
 // =====================================================
@@ -65,11 +66,13 @@ async function processBatch(mints) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
+    // ✅ A API v2 retorna data.data[mint].price — mesma estrutura, compatível
     for (const [mint, priceData] of Object.entries(data.data || {})) {
       if (!tokens[mint]) continue;
       const token = tokens[mint];
 
       token.prevMc = token.mc;
+      // ✅ API v2: o preço está em priceData.price (igual à v1)
       token.price = priceData.price;
       // Market cap = price * supply (supply estimado de 1B se não disponível)
       token.mc = priceData.price * (token.supply || 1_000_000_000);
