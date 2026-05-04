@@ -2429,7 +2429,7 @@ async function syncTokensFromSupabase() {
   } catch(e) { /* silencia */ }
 }
 
-
+function saveGlobalParams() {
   state.config.interval = parseInt(document.getElementById('cfg-interval').value) || 120;
   state.config.slippage = parseInt(document.getElementById('cfg-default-slippage').value) || 15;
   state.config.commitment = document.getElementById('cfg-commitment').value;
