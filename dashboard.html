@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SOL Hunter — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -1935,6 +1935,27 @@ function toggleSelectAll() {
   document.querySelectorAll('.preview-check').forEach(c => c.checked = val);
 }
 
+// Aguarda um comando do Supabase ser executado pelo Railway (polling)
+// Retorna o status final: 'done' | 'skipped' | 'error' | 'timeout'
+async function waitForCommandResult(db, cmdId, timeoutMs = 60000) {
+  const start = Date.now();
+  const pollInterval = 2000; // verifica a cada 2s
+  while (Date.now() - start < timeoutMs) {
+    await sleep(pollInterval);
+    try {
+      const { data, error } = await db.from('sol_hunter_commands')
+        .select('status, result')
+        .eq('id', cmdId)
+        .single();
+      if (error) continue;
+      if (['done', 'skipped', 'error', 'cancelled'].includes(data.status)) {
+        return data;
+      }
+    } catch(e) { /* continua polling */ }
+  }
+  return { status: 'timeout', result: 'Railway não respondeu em tempo hábil' };
+}
+
 async function executeBuy() {
   const amountSol = parseFloat(document.getElementById('buy-amount-sol').value) || 0.01;
   const slippage = parseInt(document.getElementById('buy-slippage').value) || 15;
@@ -1949,52 +1970,76 @@ async function executeBuy() {
 
   log(`Iniciando compra de ${selected.length} tokens — ${amountSol} SOL cada${dryRun ? ' [SIMULAÇÃO]' : ''}`, 'info');
 
-  let done = 0;
+  let done = 0, bought = 0, failed = 0;
   for (const mint of selected) {
     done++;
     const pct = Math.round((done / selected.length) * 100);
     document.getElementById('buy-progress-fill').style.width = pct + '%';
     document.getElementById('buy-progress-pct').textContent = pct + '%';
-    document.getElementById('buy-progress-label').textContent = `Comprando ${done}/${selected.length}...`;
+    document.getElementById('buy-progress-label').textContent = `Processando ${done}/${selected.length}...`;
 
     try {
       if (!dryRun) {
-        try {
-          // Envia comando via Supabase — Railway lê e executa
-          const db = getSupabase();
-          if (!db) throw new Error('Supabase não configurado');
-          const tbl = await db.from('sol_hunter_commands');
-          const { error: insertErr } = await tbl.insert({
+        const db = getSupabase();
+        if (!db) throw new Error('Supabase não configurado');
+
+        // 1. Envia comando para o Railway
+        const { data: inserted, error: insertErr } = await db.from('sol_hunter_commands')
+          .insert({
             action: 'buy',
             payload: JSON.stringify({ mint, amountSol, slippage, priority }),
             status: 'pending',
             created_at: new Date().toISOString()
-          });
-          if (insertErr) throw new Error('Supabase: ' + insertErr.message);
-          // Só adiciona ao monitor local depois que o comando foi enfileirado com sucesso
-          addBuyLog(`⟳ ${shortAddr(mint)} — aguardando Railway executar...`, 'warn');
+          })
+          .select('id')
+          .single();
+
+        if (insertErr || !inserted) throw new Error('Supabase insert: ' + (insertErr?.message || 'sem retorno'));
+
+        addBuyLog(`⟳ ${shortAddr(mint)} — aguardando Railway confirmar compra...`, 'warn');
+
+        // 2. Aguarda Railway executar e confirmar (máx 60s)
+        const cmdResult = await waitForCommandResult(db, inserted.id, 60000);
+
+        if (cmdResult.status === 'done') {
+          // Compra confirmada na blockchain — só agora adiciona ao monitor
+          addBuyLog(`✓ ${shortAddr(mint)} — compra confirmada!`, 'success');
           addTokenToMonitor(mint);
-        } catch(e) {
-          addBuyLog(`✗ ${shortAddr(mint)} — FALHA: ${e.message}`, 'error');
-          // NÃO adiciona ao monitor — compra não foi confirmada
+          bought++;
+        } else if (cmdResult.status === 'skipped') {
+          addBuyLog(`— ${shortAddr(mint)} — já possui esse token, pulado`, 'info');
+        } else if (cmdResult.status === 'timeout') {
+          addBuyLog(`⏱ ${shortAddr(mint)} — timeout: Railway não confirmou. Token NÃO adicionado ao monitor.`, 'error');
+          failed++;
+        } else {
+          // status === 'error' ou 'cancelled'
+          addBuyLog(`✗ ${shortAddr(mint)} — FALHA: ${cmdResult.result}`, 'error');
+          failed++;
         }
       } else {
+        // Modo simulação
         await sleep(80);
         addBuyLog(`[SIM] ${shortAddr(mint)} — simulado OK`, 'warn');
         addTokenToMonitor(mint);
+        bought++;
       }
     } catch(e) {
       addBuyLog(`✗ ${shortAddr(mint)} — erro inesperado: ${e.message}`, 'error');
-      // NÃO adiciona ao monitor em nenhum caso de erro
+      failed++;
+      // NÃO adiciona ao monitor em caso de erro
     }
   }
 
   saveTokens();
   updateStats();
   document.getElementById('btn-buy').disabled = false;
-  document.getElementById('buy-progress-label').textContent = `Concluído! ${selected.length} tokens processados.`;
-  toast(`${selected.length} tokens adicionados ao monitor`, 'success');
-  log(`Compra concluída — ${selected.length} tokens`, 'success');
+  document.getElementById('buy-progress-label').textContent = `Concluído! ✓ ${bought} comprados${failed ? ` — ✗ ${failed} falharam` : ''}.`;
+
+  if (bought > 0 && failed === 0) toast(`${bought} token(s) comprado(s) e adicionado(s) ao monitor`, 'success');
+  else if (bought > 0) toast(`${bought} comprado(s), ${failed} falhou/falharam`, 'warn');
+  else toast(`Nenhuma compra confirmada — verifique o saldo`, 'error');
+
+  log(`Compra concluída — ${bought} confirmados, ${failed} falharam`, bought > 0 ? 'success' : 'error');
 }
 
 function addTokenToMonitor(mint) {
