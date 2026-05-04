@@ -320,17 +320,31 @@ app.get('/api/sales', async (req, res) => {
 // =====================================================
 async function handleTargetHit(token, targetIndex, target) {
   console.log('[TARGET HIT] ' + token.mint + ' — Alvo ' + (targetIndex + 1) + ' — MC: $' + token.mc);
-  try {
-    const result = await seller.sellToken({
-      mint: token.mint, pct: target.pct, slippage: target.slip || config.slippage,
-    });
-    await db.recordSale({
-      mint: token.mint, pct: target.pct, sol_received: result.solReceived,
-      txid: result.txid, sold_at: new Date().toISOString(),
-      trigger: 'target_' + (targetIndex + 1),
-    });
-  } catch (e) {
-    console.error('[TARGET SELL ERROR]', e.message);
+
+  const MAX_RETRIES = 4;
+  const RETRY_DELAY_MS = 5000; // 5s entre tentativas
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await seller.sellToken({
+        mint: token.mint, pct: target.pct, slippage: target.slip || config.slippage,
+      });
+      await db.recordSale({
+        mint: token.mint, pct: target.pct, sol_received: result.solReceived,
+        txid: result.txid, sold_at: new Date().toISOString(),
+        trigger: 'target_' + (targetIndex + 1),
+      });
+      console.log(`[TARGET SELL] ✓ Venda confirmada (tentativa ${attempt}/${MAX_RETRIES}) — ${token.mint.slice(0,8)}`);
+      return; // sucesso, encerra
+    } catch (e) {
+      console.error(`[TARGET SELL] ✗ Tentativa ${attempt}/${MAX_RETRIES} falhou: ${e.message}`);
+      if (attempt < MAX_RETRIES) {
+        console.log(`[TARGET SELL] Aguardando ${RETRY_DELAY_MS/1000}s antes de tentar novamente...`);
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      } else {
+        console.error(`[TARGET SELL] ✗ Todas as ${MAX_RETRIES} tentativas falharam para ${token.mint.slice(0,8)}. Venda não executada.`);
+      }
+    }
   }
 }
 
